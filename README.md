@@ -10,7 +10,7 @@ b6143938e1a4a0eb1f27f121acdde63c
 ### Progress
 
 - [ ] LEC 1: [Introduction](https://pdos.csail.mit.edu/6.824/notes/l01.txt), [video](https://youtu.be/WtZ7pcRSkOA) 
-  - [ ] Preparation: Read [MapReduce (2004)](https://pdos.csail.mit.edu/6.824/papers/mapreduce.pdf) 
+  - [x] Preparation: Read [MapReduce (2004)](https://pdos.csail.mit.edu/6.824/papers/mapreduce.pdf) 
   - [ ] Assigned: [Lab 1: MapReduce](https://pdos.csail.mit.edu/6.824/labs/lab-mr.html)
 
 - [ ] LEC 2: [RPC and Threads](https://pdos.csail.mit.edu/6.824/notes/l-rpc.txt), [crawler.go](https://pdos.csail.mit.edu/6.824/notes/crawler.go), [kv.go](https://pdos.csail.mit.edu/6.824/notes/kv.go), [vote examples](https://pdos.csail.mit.edu/6.824/notes/condvar.tar.gz), [video](https://youtu.be/oZR76REwSyA) 
