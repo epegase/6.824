@@ -17,7 +17,7 @@ b6143938e1a4a0eb1f27f121acdde63c
   - [x] Preparation: Do [Online Go tutorial](http://tour.golang.org/) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/tour-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-gointro&lec=2))
 
 - [ ] LEC 3: [GFS](https://pdos.csail.mit.edu/6.824/notes/l-gfs.txt), [video](https://youtu.be/6ETFk1-53qU) 
-  - [ ] Preparation: Read [GFS (2003)](https://pdos.csail.mit.edu/6.824/papers/gfs.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/gfs-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-gfs&lec=3)) 
+  - [x] Preparation: Read [GFS (2003)](https://pdos.csail.mit.edu/6.824/papers/gfs.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/gfs-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-gfs&lec=3)) 
   - [ ] Assigned: [Lab 2: Raft](https://pdos.csail.mit.edu/6.824/labs/lab-raft.html)
 
 - [ ] LEC 4: [Primary-Backup Replication](https://pdos.csail.mit.edu/6.824/notes/l-vm-ft.txt), [video](https://youtu.be/gXiDmq1zDq4) 
