@@ -20,7 +20,7 @@ b6143938e1a4a0eb1f27f121acdde63c
   - [x] Preparation: Read [GFS (2003)](https://pdos.csail.mit.edu/6.824/papers/gfs.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/gfs-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-gfs&lec=3)) 
   - [ ] Assigned: [Lab 2: Raft](https://pdos.csail.mit.edu/6.824/labs/lab-raft.html)
 
-- [ ] LEC 4: [Primary-Backup Replication](https://pdos.csail.mit.edu/6.824/notes/l-vm-ft.txt), [video](https://youtu.be/gXiDmq1zDq4) 
+- [x] LEC 4: [Primary-Backup Replication](https://pdos.csail.mit.edu/6.824/notes/l-vm-ft.txt), [video](https://youtu.be/gXiDmq1zDq4) 
   - [x] Preparation: Read [Fault-Tolerant Virtual Machines (2010)](https://pdos.csail.mit.edu/6.824/papers/vm-ft.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/vm-ft-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-vm-ft&lec=4))
 
 - [ ] LEC 5: [Fault Tolerance: Raft (1)](https://pdos.csail.mit.edu/6.824/notes/l-raft.txt), [video](https://youtu.be/R2-9bsKmEbo) 
