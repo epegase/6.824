@@ -27,7 +27,7 @@ b6143938e1a4a0eb1f27f121acdde63c
   - [x] Preparation: Read [Raft (extended) (2014), to end of Section 5](https://pdos.csail.mit.edu/6.824/papers/raft-extended.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/raft-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-raft&lec=5))
 
 - [ ] LEC 6: [Debugging](https://pdos.csail.mit.edu/6.824/notes/debugging.pdf) 
-  - [ ] Preparation: Read [Debugging by Pretty Printing](https://blog.josejg.com/debugging-pretty/) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-debug&lec=6))
+  - [x] Preparation: Read [Debugging by Pretty Printing](https://blog.josejg.com/debugging-pretty/) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-debug&lec=6))
 
 - [ ] LEC 7: [Fault Tolerance: Raft (2)](https://pdos.csail.mit.edu/6.824/notes/l-raft2.txt), [video](https://youtu.be/h3JiQ_lnkE8) 
   - [ ] Preparation: Read [Raft (extended) (2014), Section 7 to end (but not Section 6)](https://pdos.csail.mit.edu/6.824/papers/raft-extended.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/raft2-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-raft2&lec=7)) 
