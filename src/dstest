@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# ref: https://gist.github.com/JJGO/0d73540ef7cc2f066cb535156b7cbdab
+# source: https://gist.github.com/JJGO/0d73540ef7cc2f066cb535156b7cbdab
 
 import itertools
 import math
