@@ -128,10 +128,14 @@ func Make(
 		electionAlarm: nextElectionAlarm(),
 	}
 
-	Debug(rf, dClient, "Started at T:%d", rf.currentTerm)
-
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
+
+	lastLogIndex := 0
+	if l := len(rf.log); l > 0 {
+		lastLogIndex = rf.log[l-1].Index
+	}
+	Debug(rf, dClient, "Started at T:%d LLI:%d", rf.currentTerm, lastLogIndex)
 
 	// start ticker goroutine to start elections
 	go rf.ticker()
@@ -147,6 +151,17 @@ func (rf *Raft) GetState() (term int, isLeader bool) {
 	defer rf.mu.Unlock()
 	return rf.currentTerm, rf.state == Leader
 }
+
+// step down as a follower,
+// with mutex held
+func (rf *Raft) stepDown(term int) {
+	rf.state = Follower
+	rf.currentTerm = term
+	rf.votedFor = voteForNull
+	rf.electionAlarm = nextElectionAlarm()
+}
+
+/************************* Persist *******************************************/
 
 //
 // save Raft's persistent state to stable storage,
@@ -191,9 +206,7 @@ func (rf *Raft) readPersist(data []byte) {
 // have more recent info since it communicate the snapshot on applyCh.
 //
 func (rf *Raft) CondInstallSnapshot(lastIncludedTerm int, lastIncludedIndex int, snapshot []byte) bool {
-
 	// Your code here (2D).
-
 	return true
 }
 
@@ -203,11 +216,6 @@ func (rf *Raft) CondInstallSnapshot(lastIncludedTerm int, lastIncludedIndex int,
 // that index. Raft should now trim its log as much as possible.
 func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	// Your code here (2D).
-
-}
-
-func (rf *Raft) isLogUpToDateWithMe(logIndex int, logTerm int) bool {
-	return true
 }
 
 /************************* RequestVote ****************************************/
@@ -242,12 +250,11 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 
 	if args.Term > rf.currentTerm {
 		Debug(rf, dTerm, "RV request term is higher(%d > %d), following", args.Term, rf.currentTerm)
-		rf.state = Follower
-		rf.currentTerm = args.Term
+		rf.stepDown(args.Term)
 	}
 
 	Debug(rf, dVote, "C%d asking for Vote, T%d", args.CandidateId, args.Term)
-	if (rf.votedFor == voteForNull || rf.votedFor == args.CandidateId) && rf.isLogUpToDateWithMe(args.LastLogIndex, args.LastLogTerm) {
+	if rf.votedFor == voteForNull || rf.votedFor == args.CandidateId {
 		Debug(rf, dVote, "Granting Vote to S%d at T%d", args.CandidateId, args.Term)
 		reply.VoteGranted = true
 		rf.votedFor = args.CandidateId
@@ -285,25 +292,24 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 // the struct itself.
 //
 func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *RequestVoteReply) bool {
+	Debug(rf, dLog, "T%d -> S%d Sending RV, LLI:%d LLT:%d", args.Term, server, args.LastLogIndex, args.LastLogTerm)
 	ok := rf.peers[server].Call("Raft.RequestVote", args, reply)
 	return ok
 }
 
-func (rf *Raft) requestVote(server int, args *RequestVoteArgs, grant chan<- bool, quit <-chan bool) {
-	granted := false
+func (rf *Raft) requestVote(server int, args *RequestVoteArgs, grant chan<- bool) {
 	reply := &RequestVoteReply{}
 	r := rf.sendRequestVote(server, args, reply)
 
+	granted := false
 	if r {
 		rf.mu.Lock()
 		// TODO: re-check all relevant assumptions
 		// - check that rf.currentTerm hasn't changed since the decision to become a candidate
 
 		if reply.Term > rf.currentTerm {
-			Debug(rf, dTerm, "RV reply term is higher(%d > %d), following", reply.Term, rf.currentTerm)
-			rf.state = Follower
-			rf.currentTerm = reply.Term
-			granted = false
+			Debug(rf, dTerm, "RV <- S%d Term is higher(%d > %d), following", server, reply.Term, rf.currentTerm)
+			rf.stepDown(reply.Term)
 		} else {
 			if reply.VoteGranted {
 				granted = true
@@ -312,12 +318,8 @@ func (rf *Raft) requestVote(server int, args *RequestVoteArgs, grant chan<- bool
 		rf.mu.Unlock()
 	}
 
-	select {
-	case grant <- granted:
-		Debug(rf, dVote, "<- S%d Got Vote: %t", server, granted)
-	case <-quit:
-		Debug(rf, dVote, "Quit and ignore RequestVote reply from S%d", server)
-	}
+	Debug(rf, dVote, "<- S%d Got Vote: %t, at T%d", server, granted, args.Term)
+	grant <- granted
 }
 
 // The ticker go routine starts a new election if this peer hasn't received
@@ -368,34 +370,36 @@ func (rf *Raft) ticker() {
 				}
 				rf.mu.Unlock()
 
-				grant, quit := make(chan bool), make(chan bool)
+				grant := make(chan bool)
 				// - Send RequestVote RPCs to all other servers
 				for i := range rf.peers {
 					if i != rf.me {
-						go rf.requestVote(i, args, grant, quit)
+						go rf.requestVote(i, args, grant)
 					}
 				}
 
-				cnt := 1
-				done := false
-				for i := 0; i < len(rf.peers)-1; i++ {
-					if done {
-						quit <- true
-						continue
+				go func() {
+					cnt := 1
+					done := false
+					for i := 0; i < len(rf.peers)-1; i++ {
+						if <-grant {
+							cnt++
+						}
+						// Votes received from majority of servers: become leader
+						if !done && cnt >= len(rf.peers)/2+1 {
+							Debug(rf, dLeader, "Achieved Majority for T%d (%d), converting to Leader", rf.currentTerm, cnt)
+							done = true
+							rf.mu.Lock()
+							if rf.state != Candidate {
+								rf.mu.Unlock()
+							} else {
+								rf.state = Leader
+								rf.mu.Unlock()
+								go rf.heartbeat()
+							}
+						}
 					}
-					if <-grant {
-						cnt++
-					}
-					// Votes received from majority of servers: become leader
-					if !done && cnt >= len(rf.peers)/2+1 {
-						Debug(rf, dLeader, "Achieved Majority for T%d (%d), converting to Leader", rf.currentTerm, cnt)
-						done = true
-						rf.mu.Lock()
-						rf.state = Leader
-						rf.mu.Unlock()
-						go rf.heartbeat()
-					}
-				}
+				}()
 			}
 		} else {
 			rf.mu.Unlock()
@@ -442,22 +446,25 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	if args.Term < rf.currentTerm {
 	}
 
+	rpc := "AE"
+	if len(args.Entries) == 0 {
+		rpc = "HB"
+	}
 	if args.Term > rf.currentTerm {
-		rpc := "AE"
-		if len(args.Entries) == 0 {
-			rpc = "HB"
-		}
 		Debug(rf, dTerm, "%s request term is higher(%d > %d), following", rpc, args.Term, rf.currentTerm)
-		rf.state = Follower
-		rf.currentTerm = args.Term
+		rf.stepDown(args.Term)
 	}
 
-	Debug(rf, dTimer, "Resetting ELT, received AppEnt T%d", args.Term)
+	Debug(rf, dTimer, "Resetting ELT, received %s T%d", rpc, args.Term)
 	rf.electionAlarm = nextElectionAlarm()
 }
 
 func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *AppendEntriesReply) bool {
-	Debug(rf, dLog, "-> S%d Sending PLI:%d PLT:%d LC:%d", server, args.PrevLogIndex, args.PrevLogTerm, args.LeaderCommit)
+	rpc := "AE"
+	if len(args.Entries) == 0 {
+		rpc = "HB"
+	}
+	Debug(rf, dLog, "T%d -> S%d Sending %s, PLI:%d PLT:%d LC:%d", args.Term, server, rpc, args.PrevLogIndex, args.PrevLogTerm, args.LeaderCommit)
 	ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)
 	return ok
 }
@@ -472,9 +479,8 @@ func (rf *Raft) sendHearBeat(server int, args *AppendEntriesArgs) {
 		// - check that rf.currentTerm hasn't changed since the decision to become a candidate
 
 		if reply.Term > rf.currentTerm {
-			Debug(rf, dTerm, "HB reply term is higher(%d > %d), following", reply.Term, rf.currentTerm)
-			rf.state = Follower
-			rf.currentTerm = reply.Term
+			Debug(rf, dTerm, "HB <- S%d Term is higher(%d > %d), following", server, reply.Term, rf.currentTerm)
+			rf.stepDown(reply.Term)
 		}
 		rf.mu.Unlock()
 	}
@@ -489,19 +495,22 @@ func (rf *Raft) heartbeat() {
 	}
 	rf.mu.Unlock()
 
-	Debug(rf, dTimer, "Enable heartbeat as Leader")
 	for !rf.killed() {
 		rf.mu.Lock()
-		args := &AppendEntriesArgs{
-			Term:     rf.currentTerm,
-			LeaderId: rf.me,
-		}
-		rf.mu.Unlock()
+		if rf.state != Leader {
+			rf.mu.Unlock()
+		} else {
+			args := &AppendEntriesArgs{
+				Term:     rf.currentTerm,
+				LeaderId: rf.me,
+			}
+			rf.mu.Unlock()
 
-		Debug(rf, dTimer, "Leader, broadcasting heartbeats")
-		for i := range rf.peers {
-			if i != rf.me {
-				go rf.sendHearBeat(i, args)
+			Debug(rf, dTimer, "Leader at T%d, broadcasting heartbeats", rf.currentTerm)
+			for i := range rf.peers {
+				if i != rf.me {
+					go rf.sendHearBeat(i, args)
+				}
 			}
 		}
 

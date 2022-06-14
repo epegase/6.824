@@ -9,7 +9,6 @@ package raft
 //
 
 import (
-	"fmt"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -29,12 +28,14 @@ func TestInitialElection2A(t *testing.T) {
 	cfg.begin("Test (2A): initial election")
 
 	// is a leader elected?
-	cfg.checkOneLeader()
+	leader1 := cfg.checkOneLeader()
+	Debug(nil, dTest, "InitialElection2A leader1: %d", leader1)
 
 	// sleep a bit to avoid racing with followers learning of the
 	// election, then check that all peers agree on the term.
 	time.Sleep(50 * time.Millisecond)
 	term1 := cfg.checkTerms()
+	Debug(nil, dTest, "InitialElection2A term1: %d", term1)
 	if term1 < 1 {
 		t.Fatalf("term is %v, but should be at least 1", term1)
 	}
@@ -42,12 +43,17 @@ func TestInitialElection2A(t *testing.T) {
 	// does the leader+term stay the same if there is no network failure?
 	time.Sleep(2 * RaftElectionTimeout)
 	term2 := cfg.checkTerms()
+	Debug(nil, dTest, "InitialElection2A term2: %d", term2)
 	if term1 != term2 {
-		fmt.Printf("warning: term changed even though there were no failures")
+		t.Fatalf("term changed (T%d -> T%d) even though there were no failures", term1, term2)
 	}
 
 	// there should still be a leader.
-	cfg.checkOneLeader()
+	leader2 := cfg.checkOneLeader()
+	Debug(nil, dTest, "InitialElection2A leader2: %d", leader2)
+	if leader1 != leader2 {
+		t.Fatalf("leader changed (L%d -> L%d) even though there were no failures", leader1, leader2)
+	}
 
 	cfg.end()
 }
@@ -60,21 +66,36 @@ func TestReElection2A(t *testing.T) {
 	cfg.begin("Test (2A): election after network failure")
 
 	leader1 := cfg.checkOneLeader()
+	Debug(nil, dTest, "ReElection2A leader1: %d", leader1)
 
 	// if the leader disconnects, a new one should be elected.
 	cfg.disconnect(leader1)
-	cfg.checkOneLeader()
+	Debug(nil, dTest, "ReElection2A disconnect leader1: %d", leader1)
+	leader1p := cfg.checkOneLeader()
+	Debug(nil, dTest, "ReElection2A after disconnect leader1: %d, get new leader1p: %d", leader1, leader1p)
+	if leader1 == leader1p {
+		t.Fatalf("no new leader elected when old leader: %d disconnected", leader1)
+	}
 
 	// if the old leader rejoins, that shouldn't
 	// disturb the new leader. and the old leader
 	// should switch to follower.
 	cfg.connect(leader1)
+	Debug(nil, dTest, "ReElection2A rejoin leader1: %d", leader1)
 	leader2 := cfg.checkOneLeader()
+	Debug(nil, dTest, "ReElection2A after rejoin leader1: %d, get new leader2: %d", leader1, leader2)
+	if leader1p != leader2 {
+		t.Fatalf("new leader: %d lost current term, newer leader: %d", leader1p, leader2)
+	}
+	if _, isLeader := cfg.rafts[leader1].GetState(); isLeader {
+		t.Fatalf("old leader: %d still think itself as leader", leader1)
+	}
 
 	// if there's no quorum, no new leader should
 	// be elected.
 	cfg.disconnect(leader2)
 	cfg.disconnect((leader2 + 1) % servers)
+	Debug(nil, dTest, "ReElection2A disconnect server %d & %d", leader2, (leader2+1)%servers)
 	time.Sleep(2 * RaftElectionTimeout)
 
 	// check that the one connected server
@@ -83,11 +104,24 @@ func TestReElection2A(t *testing.T) {
 
 	// if a quorum arises, it should elect a leader.
 	cfg.connect((leader2 + 1) % servers)
-	cfg.checkOneLeader()
+	Debug(nil, dTest, "ReElection2A rejoin server: %d", (leader2+1)%servers)
+	leader3 := cfg.checkOneLeader()
+	Debug(nil, dTest, "ReElection2A after rejoin server: %d, get new leader3: %d", (leader2+1)%servers, leader3)
+	if leader3 == leader2 {
+		t.Fatalf("disconnected server: %d is now leader", leader2)
+	}
 
 	// re-join of last node shouldn't prevent leader from existing.
 	cfg.connect(leader2)
-	cfg.checkOneLeader()
+	Debug(nil, dTest, "ReElection2A rejoin leader2: %d", leader2)
+	leader4 := cfg.checkOneLeader()
+	Debug(nil, dTest, "ReElection2A after rejoin leader2: %d, get new leader4: %d", leader2, leader4)
+	if leader4 != leader3 {
+		t.Fatalf("re-join of last node: %d changed leader to %d", leader2, leader4)
+	}
+	if _, isLeader := cfg.rafts[leader2].GetState(); isLeader {
+		t.Fatalf("old leader: %d before re-join of last node: %d, still think itself as leader", leader2, leader2)
+	}
 
 	cfg.end()
 }
