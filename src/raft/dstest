@@ -13,6 +13,7 @@ import time
 import os
 import sys
 import datetime
+import platform
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from dataclasses import dataclass
@@ -143,7 +144,7 @@ def run_tests(
     fast_fail: bool        = typer.Option(False,  '--fast-fail',       '-ff',   help='Exit on first failure'),
     # fmt: on
 ):
-    print(f"[green]Run as `{' '.join(sys.argv)}`[/green]")
+    print(f"[green]Run as `{' '.join(sys.argv)}`[/green]\n")
 
     if output is None:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -152,11 +153,27 @@ def run_tests(
     if race:
         print("[yellow]Running with the race detector[/yellow]")
 
+    if workers > 1:
+        import multiprocessing
+        print(f"[yellow]Running with {workers} workers / {multiprocessing.cpu_count()} CPU cores available[/yellow]")
+
+    if platform.system() == 'Linux':
+        lscpu = subprocess.check_output('lscpu', shell=True).strip().decode()
+        import re
+        m = re.search('Model name:\s*(.*)', lscpu)
+        if m:
+            print(f'[yellow]Running on CPU model: {m[1]}[/yellow]')
+
     if verbose > 0:
-        print(f"[yellow]Verbosity level set to {verbose}[/yellow]")
+        print(f"[yellow]Running with verbosity level: {verbose}[/yellow]")
         os.environ['VERBOSE'] = str(verbose)
 
+    print()
     fast_failed = False
+    total_iterations = 0
+
+    if loop:
+        print(f'[yellow]Initial iterations: {iterations}[/yellow]')
 
     while True:
 
@@ -251,12 +268,16 @@ def run_tests(
 
         print_results(results, timing)
 
+        total_iterations += iterations
+
         if loop and not fast_failed and iterations < max_iter:
             iterations *= growth
             iterations = min(iterations, max_iter)
             print(f"[yellow]Increasing iterations to {iterations}[/yellow]")
         else:
             break
+
+    print(f'\n[green]Completed {total_iterations} iterations in total[/green]')
 
 
 if __name__ == "__main__":

@@ -173,8 +173,7 @@ func (rf *Raft) killed() bool {
 	return z == 1
 }
 
-// step down as a follower,
-// with mutex held
+// step down as a follower, with mutex held
 func (rf *Raft) stepDown(term int) {
 	rf.state = Follower
 	rf.currentTerm = term
@@ -280,6 +279,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	reply.VoteGranted = false
 
 	if args.Term < rf.currentTerm {
+		// Respond to RPCs from candidates and leaders
 		// Reply false if term < currentTerm
 		return
 	}
@@ -349,6 +349,7 @@ func (rf *Raft) requestVote(server int, args *RequestVoteArgs, grant chan<- bool
 		// - rf.currentTerm hasn't changed since the decision to become a candidate
 		if rf.state == Candidate && args.Term == rf.currentTerm {
 			if reply.Term > rf.currentTerm {
+				// If RPC response contains term T > currentTerm: set currentTerm = T, convert to follower
 				Debug(rf, dTerm, "RV <- S%d Term is higher(%d > %d), following", server, reply.Term, rf.currentTerm)
 				rf.stepDown(reply.Term)
 			} else {
@@ -392,14 +393,7 @@ func (rf *Raft) collectVote(term int, grant <-chan bool) {
 
 // The ticker go routine starts a new election if this peer hasn't received heartbeats recently.
 func (rf *Raft) ticker() {
-	rf.mu.Lock()
-	if rf.state == Leader {
-		s := "A Leader, but start ticker"
-		Debug(rf, dError, s)
-		panic(s)
-	}
-	rf.mu.Unlock()
-
+	var sleepDuration time.Duration
 	for !rf.killed() {
 		// Your code here to check if a leader election should
 		// be started and to randomize sleeping time using
@@ -408,8 +402,15 @@ func (rf *Raft) ticker() {
 		if rf.state != Leader {
 			Debug(rf, dTimer, "Not Leader, checking election timeout")
 			if rf.electionAlarm.After(time.Now()) {
+				// Not reach election timeout, going to sleep
+				sleepDuration = time.Until(rf.electionAlarm)
 				rf.mu.Unlock()
 			} else {
+				// If election timeout elapses without
+				//  receiving AppendEntries RPC from current leader
+				//  or granting vote to candidate:
+				// convert to candidate, start new election
+
 				// On conversion to candidate, start election:
 				// - Increment currentTerm
 				rf.currentTerm++
@@ -422,6 +423,7 @@ func (rf *Raft) ticker() {
 				// - Reset election timer
 				Debug(rf, dTimer, "Resetting ELT because election")
 				rf.electionAlarm = nextElectionAlarm()
+				sleepDuration = time.Until(rf.electionAlarm)
 
 				args := rf.constructRequestVoteArgs()
 				rf.mu.Unlock()
@@ -434,19 +436,15 @@ func (rf *Raft) ticker() {
 					}
 				}
 
+				// Candidate collects votes for current term
 				go rf.collectVote(args.Term, grant)
 			}
 		} else {
+			// Leader resets its own election timeout alarm each time
+			rf.electionAlarm = nextElectionAlarm()
+			sleepDuration = time.Until(rf.electionAlarm)
 			rf.mu.Unlock()
 		}
-
-		rf.mu.Lock()
-		if rf.state == Leader {
-			// Leader reset its own election timeout alarm each time
-			rf.electionAlarm = nextElectionAlarm()
-		}
-		sleepDuration := time.Until(rf.electionAlarm)
-		rf.mu.Unlock()
 
 		Debug(rf, dTimer, "Ticker going to sleep for %d ms", sleepDuration.Milliseconds())
 		time.Sleep(sleepDuration)
@@ -486,6 +484,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	reply.Success = false
 
 	if args.Term < rf.currentTerm {
+		// Respond to RPCs from candidates and leaders
 		// Reply false if term < currentTerm
 		return
 	}
@@ -507,56 +506,6 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 	return ok
 }
 
-/************************* Heartbeat ******************************************/
-
-// The heartBeat go routine sends AppendEntries RPC (act as HeartBeat RPC) to one peer and deal with reply
-func (rf *Raft) heartBeat(server int, args *AppendEntriesArgs) {
-	reply := &AppendEntriesReply{}
-	r := rf.sendAppendEntries(server, args, reply)
-
-	if r {
-		rf.mu.Lock()
-		if reply.Term > rf.currentTerm {
-			Debug(rf, dTerm, "HB <- S%d Term is higher(%d > %d), following", server, reply.Term, rf.currentTerm)
-			rf.stepDown(reply.Term)
-		}
-		rf.mu.Unlock()
-	}
-}
-
-// The pacemaker go routine broadcasts periodic heartbeat to all followers
-func (rf *Raft) pacemaker(term int) {
-	rf.mu.Lock()
-	if rf.state != Leader {
-		s := "Not a Leader, but start heartbeat"
-		Debug(rf, dError, s)
-		panic(s)
-	}
-	rf.mu.Unlock()
-
-	for !rf.killed() {
-		rf.mu.Lock()
-		// re-check state and term each time, before broadcast
-		if rf.state != Leader || rf.currentTerm != term {
-			rf.mu.Unlock()
-			// end of broadcast for this term
-			return
-		}
-
-		args := rf.constructAppendEntriesArgs()
-		rf.mu.Unlock()
-
-		Debug(rf, dTimer, "Leader at T%d, broadcasting heartbeats", rf.currentTerm)
-		for i := range rf.peers {
-			if i != rf.me {
-				go rf.heartBeat(i, args)
-			}
-		}
-
-		time.Sleep(heartbeatInterval * time.Millisecond)
-	}
-}
-
 //
 // the service using Raft (e.g. a k/v server) wants to start
 // agreement on the next command to be appended to Raft's log. if this
@@ -573,6 +522,76 @@ func (rf *Raft) pacemaker(term int) {
 //
 func (rf *Raft) Start(command interface{}) (index int, term int, isLeader bool) {
 	// Your code here (2B).
+	rf.mu.Lock()
+	if rf.state != Leader {
+		rf.mu.Unlock()
+		return
+	}
 
+	index = 1
+	if l := len(rf.log); l > 0 {
+		index = rf.log[l-1].Index + 1
+	}
+	term = rf.currentTerm
+	isLeader = true
+
+	rf.mu.Unlock()
 	return
+}
+
+/************************* Heartbeat ******************************************/
+
+// The heartBeat go routine sends AppendEntries RPC (act as HeartBeat RPC) to one peer and deal with reply
+func (rf *Raft) heartBeat(server int, args *AppendEntriesArgs) {
+	reply := &AppendEntriesReply{}
+	r := rf.sendAppendEntries(server, args, reply)
+
+	if r {
+		rf.mu.Lock()
+		if reply.Term > rf.currentTerm {
+			// If RPC response contains term T > currentTerm: set currentTerm = T, convert to follower
+			Debug(rf, dTerm, "HB <- S%d Term is higher(%d > %d), following", server, reply.Term, rf.currentTerm)
+			rf.stepDown(reply.Term)
+		}
+		rf.mu.Unlock()
+	}
+}
+
+// The pacemaker go routine broadcasts periodic heartbeat to all followers
+// Upon election: send initial empty AppendEntries RPCs (heartbeat) to each server
+// repeat during idle periods to prevent election timeouts
+func (rf *Raft) pacemaker(term int) {
+	// only Leader can start pacemaker
+	// Leader's pacemaker only last for its current term
+	rf.mu.Lock()
+	if rf.state != Leader {
+		s := "Not a Leader, but start heartbeat"
+		Debug(rf, dError, s)
+		panic(s)
+	}
+	rf.mu.Unlock()
+
+	for !rf.killed() {
+		rf.mu.Lock()
+		// re-check state and term each time, before broadcast
+		if rf.state != Leader || rf.currentTerm != term {
+			rf.mu.Unlock()
+			// end of pacemaker for this term
+			return
+		}
+
+		args := rf.constructAppendEntriesArgs()
+		rf.mu.Unlock()
+
+		// send heartbeat to each server
+		Debug(rf, dTimer, "Leader at T%d, broadcasting heartbeats", args.Term)
+		for i := range rf.peers {
+			if i != rf.me {
+				go rf.heartBeat(i, args)
+			}
+		}
+
+		// repeat during idle periods to prevent election timeout
+		time.Sleep(heartbeatInterval * time.Millisecond)
+	}
 }
