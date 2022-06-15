@@ -143,6 +143,7 @@ def run_tests(
     fast_fail: bool        = typer.Option(False,  '--fast-fail',       '-ff',   help='Exit on first failure'),
     # fmt: on
 ):
+    print(f"[green]Run as `{' '.join(sys.argv)}`[/green]")
 
     if output is None:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")

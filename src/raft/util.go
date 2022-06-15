@@ -15,7 +15,7 @@ const (
 	// election timeout range, in millisecond
 	electionTimeoutMax = 1600
 	electionTimeoutMin = 800
-	// heartbeat interval, in millisecond (8 heartbeat RPCs per second)
+	// heartbeat interval, in millisecond (10 heartbeat RPCs per second)
 	// heartbeat interval should be one order less than election timeout
 	heartbeatInterval = 100
 )
