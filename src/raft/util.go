@@ -12,14 +12,12 @@ import (
 const (
 	// special NULL value for voteFor
 	voteForNull = -1
-	// special NULL value for leaderId
-	leaderIdNull = -1
 	// election timeout range, in millisecond
-	electionTimeoutMax = 1800
-	electionTimeoutMin = 1000
+	electionTimeoutMax = 1600
+	electionTimeoutMin = 800
 	// heartbeat interval, in millisecond (8 heartbeat RPCs per second)
 	// heartbeat interval should be one order less than election timeout
-	heartbeatInterval = 125
+	heartbeatInterval = 100
 )
 
 type serverState string
@@ -33,6 +31,14 @@ const (
 // random range
 func nextElectionAlarm() time.Time {
 	return time.Now().Add(time.Duration(rand.Intn(electionTimeoutMax-electionTimeoutMin)+electionTimeoutMin) * time.Millisecond)
+}
+
+// actual intention name of AppendEntries RPC call
+func intentOfAppendEntriesRPC(args *AppendEntriesArgs) string {
+	if len(args.Entries) == 0 {
+		return "HB"
+	}
+	return "AE"
 }
 
 // Retrieve the verbosity level from an environment variable
