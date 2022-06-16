@@ -52,8 +52,9 @@ type ApplyMsg struct {
 // Raft log entry
 //
 type LogEntry struct {
-	Index int // log index
-	Term  int // term when entry was received by leader
+	Index   int         // log index
+	Term    int         // term when entry was received by leader
+	Command interface{} // client command carried by this log entry
 }
 
 //
@@ -399,7 +400,12 @@ func (rf *Raft) ticker() {
 		// be started and to randomize sleeping time using
 		// time.Sleep().
 		rf.mu.Lock()
-		if rf.state != Leader {
+		if rf.state == Leader {
+			// Leader resets its own election timeout alarm each time
+			rf.electionAlarm = nextElectionAlarm()
+			sleepDuration = time.Until(rf.electionAlarm)
+			rf.mu.Unlock()
+		} else {
 			Debug(rf, dTimer, "Not Leader, checking election timeout")
 			if rf.electionAlarm.After(time.Now()) {
 				// Not reach election timeout, going to sleep
@@ -439,11 +445,6 @@ func (rf *Raft) ticker() {
 				// Candidate collects votes for current term
 				go rf.collectVote(args.Term, grant)
 			}
-		} else {
-			// Leader resets its own election timeout alarm each time
-			rf.electionAlarm = nextElectionAlarm()
-			sleepDuration = time.Until(rf.electionAlarm)
-			rf.mu.Unlock()
 		}
 
 		Debug(rf, dTimer, "Ticker going to sleep for %d ms", sleepDuration.Milliseconds())
@@ -506,6 +507,11 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 	return ok
 }
 
+// The agreeOn go routine
+func (rf *Raft) agreeOn() {
+
+}
+
 //
 // the service using Raft (e.g. a k/v server) wants to start
 // agreement on the next command to be appended to Raft's log. if this
@@ -535,7 +541,15 @@ func (rf *Raft) Start(command interface{}) (index int, term int, isLeader bool) 
 	term = rf.currentTerm
 	isLeader = true
 
+	rf.log = append(rf.log, LogEntry{
+		Index:   index,
+		Term:    term,
+		Command: command,
+	})
+
 	rf.mu.Unlock()
+
+	go rf.agreeOn()
 	return
 }
 
