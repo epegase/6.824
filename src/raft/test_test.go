@@ -173,6 +173,7 @@ func TestBasicAgree2B(t *testing.T) {
 			t.Fatalf("some have committed before Start()")
 		}
 
+		Debug(nil, dTest, "Start command on index: %d", index)
 		xindex := cfg.one(index*100, servers, false)
 		if xindex != index {
 			t.Fatalf("got index %v but expected %v", xindex, index)
@@ -210,6 +211,7 @@ func TestRPCBytes2B(t *testing.T) {
 	bytes1 := cfg.bytesTotal()
 	got := bytes1 - bytes0
 	expected := int64(servers) * sent
+	Debug(nil, dTest, "Got RPC bytes: %d in %d iters, expected: %d", got, iters, expected)
 	if got > expected+50000 {
 		t.Fatalf("too many RPC bytes; got %v, expected %v", got, expected)
 	}
@@ -220,7 +222,7 @@ func TestRPCBytes2B(t *testing.T) {
 //
 // test just failure of followers.
 //
-func For2023TestFollowerFailure2B(t *testing.T) {
+func TestFollowerFailure2B(t *testing.T) {
 	servers := 3
 	cfg := make_config(t, servers, false, false)
 	defer cfg.cleanup()
@@ -232,6 +234,7 @@ func For2023TestFollowerFailure2B(t *testing.T) {
 	// disconnect one follower from the network.
 	leader1 := cfg.checkOneLeader()
 	cfg.disconnect((leader1 + 1) % servers)
+	Debug(nil, dTest, "Disconnect server:%d, leader is %d", (leader1+1)%servers, leader1)
 
 	// the leader and remaining follower should be
 	// able to agree despite the disconnected follower.
@@ -243,6 +246,7 @@ func For2023TestFollowerFailure2B(t *testing.T) {
 	leader2 := cfg.checkOneLeader()
 	cfg.disconnect((leader2 + 1) % servers)
 	cfg.disconnect((leader2 + 2) % servers)
+	Debug(nil, dTest, "Disconnect server:%d & %d, leader is %d", (leader2+1)%servers, (leader2+2)%servers, leader2)
 
 	// submit a command.
 	index, _, ok := cfg.rafts[leader2].Start(104)
@@ -267,7 +271,7 @@ func For2023TestFollowerFailure2B(t *testing.T) {
 //
 // test just failure of leaders.
 //
-func For2023TestLeaderFailure2B(t *testing.T) {
+func TestLeaderFailure2B(t *testing.T) {
 	servers := 3
 	cfg := make_config(t, servers, false, false)
 	defer cfg.cleanup()
@@ -279,6 +283,7 @@ func For2023TestLeaderFailure2B(t *testing.T) {
 	// disconnect the first leader.
 	leader1 := cfg.checkOneLeader()
 	cfg.disconnect(leader1)
+	Debug(nil, dTest, "Disconnect leader1: %d", leader1)
 
 	// the remaining followers should elect
 	// a new leader.
@@ -289,6 +294,7 @@ func For2023TestLeaderFailure2B(t *testing.T) {
 	// disconnect the new leader.
 	leader2 := cfg.checkOneLeader()
 	cfg.disconnect(leader2)
+	Debug(nil, dTest, "Disconnect leader2: %d", leader2)
 
 	// submit a command to each server.
 	for i := 0; i < servers; i++ {

@@ -72,50 +72,57 @@ def main(
 
     panic = False
     for line in input_:
-        try:
-            time, topic, *msg = line.strip().split(" ")
-            if topic == 'CONF' and len(msg) >= 2 and msg[1] == 'servers':
-                n_columns = int(msg[0])
+        if not line.strip():
+            continue
 
-            # To ignore some topics
-            if topic not in topics:
-                continue
+        time, *msg = line.strip().split(" ")
 
-            msg = " ".join(msg)
-
-            # Debug calls from the test suite aren't associated with
-            # any particular peer. Otherwise we can treat second column
-            # as peer id
-            if topic not in NO_COLUMN_TOPICS:
-                i = int(msg[1])
-
-            # Colorize output by using rich syntax when needed
-            if colorize and topic in TOPICS:
-                color = TOPICS[topic]
-                msg = f"[{color}]{msg}[/{color}]"
-
-            # Single column printing. Always the case for debug stmts in tests
-            if n_columns is None or topic in NO_COLUMN_TOPICS:
-                print(time, topic, msg)
-            # Multi column printing, timing is dropped to maximize horizontal
-            # space. Heavylifting is done through rich.column.Columns object
-            else:
-                cols = ["" for _ in range(n_columns)]
-                msg = "" + msg
-                cols[i] = msg
-                col_width = int(width / n_columns)
-                cols = Columns(cols, width=col_width - 1, equal=True, expand=True)
-                print(cols)
-        except:
+        if not time.isnumeric():
             # Code from tests or panics does not follow format
             # so we print it as is
             if line.startswith("panic"):
                 panic = True
-            # Output from tests is usually important so add a
-            # horizontal line with hashes to make it more obvious
-            if not panic:
-                print("#" * console.width)
-            print(line, end="")
+
+            if panic:
+                print(line, end="")
+                continue
+            else:
+                time, topic, msg = '*'*6, 'TEST', [time]+msg
+        else:
+            topic, msg = msg[0], msg[1:]
+
+        if topic == 'CONF' and len(msg) >= 2 and msg[1] == 'servers':
+            n_columns = int(msg[0])
+
+        # To ignore some topics
+        if topic not in topics:
+            continue
+
+        msg = " ".join(msg)
+
+        # Debug calls from the test suite aren't associated with
+        # any particular peer. Otherwise we can treat second column
+        # as peer id
+        if topic not in NO_COLUMN_TOPICS:
+            i = int(msg[1])
+
+        # Colorize output by using rich syntax when needed
+        if colorize and topic in TOPICS:
+            color = TOPICS[topic]
+            msg = f"[{color}]{msg}[/{color}]"
+
+        # Single column printing. Always the case for debug stmts in tests
+        if n_columns is None or topic in NO_COLUMN_TOPICS:
+            print(time, topic, msg)
+        # Multi column printing, timing is dropped to maximize horizontal
+        # space. Heavylifting is done through rich.column.Columns object
+        else:
+            cols = ["" for _ in range(n_columns)]
+            msg = "" + msg
+            cols[i] = msg
+            col_width = int(width / n_columns)
+            cols = Columns(cols, width=col_width - 1, equal=True, expand=True)
+            print(cols)
 
 
 if __name__ == "__main__":

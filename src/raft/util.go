@@ -28,9 +28,12 @@ const (
 	Follower  serverState = "F"
 )
 
-// random range
 func nextElectionAlarm() time.Time {
-	return time.Now().Add(time.Duration(rand.Intn(electionTimeoutMax-electionTimeoutMin)+electionTimeoutMin) * time.Millisecond)
+	return time.Now().Add(time.Duration(randRange(electionTimeoutMin, electionTimeoutMax)) * time.Millisecond)
+}
+
+func initElectionAlarm() time.Time {
+	return time.Now().Add(time.Duration(randRange(0, electionTimeoutMax-electionTimeoutMin)) * time.Millisecond)
 }
 
 // actual intention name of AppendEntries RPC call
@@ -39,6 +42,18 @@ func intentOfAppendEntriesRPC(args *AppendEntriesArgs) string {
 		return "HB"
 	}
 	return "AE"
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// random range
+func randRange(from, to int) int {
+	return rand.Intn(to-from) + from
 }
 
 // Retrieve the verbosity level from an environment variable
