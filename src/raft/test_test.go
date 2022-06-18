@@ -328,6 +328,7 @@ func TestFailAgree2B(t *testing.T) {
 	// disconnect one follower from the network.
 	leader := cfg.checkOneLeader()
 	cfg.disconnect((leader + 1) % servers)
+	Debug(nil, dTest, "Disconnect server:%d, leader is %d", (leader+1)%servers, leader)
 
 	// the leader and remaining follower should be
 	// able to agree despite the disconnected follower.
@@ -339,6 +340,7 @@ func TestFailAgree2B(t *testing.T) {
 
 	// re-connect
 	cfg.connect((leader + 1) % servers)
+	Debug(nil, dTest, "Rejoin server:%d", (leader+1)%servers)
 
 	// the full set of servers should preserve
 	// previous agreements, and be able to agree
@@ -364,6 +366,7 @@ func TestFailNoAgree2B(t *testing.T) {
 	cfg.disconnect((leader + 1) % servers)
 	cfg.disconnect((leader + 2) % servers)
 	cfg.disconnect((leader + 3) % servers)
+	Debug(nil, dTest, "Disconnect server:%d & %d & %d, leader is %d", (leader+1)%servers, (leader+2)%servers, (leader+3)%servers, leader)
 
 	index, _, ok := cfg.rafts[leader].Start(20)
 	if ok != true {
@@ -384,10 +387,12 @@ func TestFailNoAgree2B(t *testing.T) {
 	cfg.connect((leader + 1) % servers)
 	cfg.connect((leader + 2) % servers)
 	cfg.connect((leader + 3) % servers)
+	Debug(nil, dTest, "Rejoin server:%d & %d & %d", (leader+1)%servers, (leader+2)%servers, (leader+3)%servers)
 
 	// the disconnected majority may have chosen a leader from
 	// among their own ranks, forgetting index 2.
 	leader2 := cfg.checkOneLeader()
+	Debug(nil, dTest, "After rejoin, new leader is %d", leader2)
 	index2, _, ok2 := cfg.rafts[leader2].Start(30)
 	if ok2 == false {
 		t.Fatalf("leader2 rejected Start()")
@@ -430,6 +435,7 @@ loop:
 			wg.Add(1)
 			go func(i int) {
 				defer wg.Done()
+				// concurrent start
 				i, term1, ok := cfg.rafts[leader].Start(100 + i)
 				if term1 != term {
 					return
@@ -463,6 +469,7 @@ loop:
 					failed = true
 					break
 				}
+				// collect all Start cmds
 				cmds = append(cmds, ix)
 			} else {
 				t.Fatalf("value %v is not an int", cmd)
@@ -478,6 +485,7 @@ loop:
 			continue
 		}
 
+		// check all Start cmds are committed, but don't care orders (because concurrency)
 		for ii := 0; ii < iters; ii++ {
 			x := 100 + ii
 			ok := false

@@ -67,12 +67,12 @@ func (e LogEntry) String() string {
 
 // A Go object implementing a single Raft peer.
 type Raft struct {
-	mu        sync.Mutex          // Lock to protect shared access to this peer's state
-	peers     []*labrpc.ClientEnd // RPC end points of all peers
-	persister *Persister          // Object to hold this peer's persisted state
-	me        int                 // this peer's index into peers[]
-	dead      int32               // set by Kill()
-	applyCh   chan<- ApplyMsg     // channel to apply committed message to upper service
+	mu            sync.Mutex          // Lock to protect shared access to this peer's state
+	peers         []*labrpc.ClientEnd // RPC end points of all peers
+	persister     *Persister          // Object to hold this peer's persisted state
+	me            int                 // this peer's index into peers[]
+	dead          int32               // set by Kill()
+	commitTrigger chan bool           // tell committer to advance commit and apply msg to client
 
 	// Your data here (2A, 2B, 2C).
 	// Look at the paper's Figure 2 for a description of what
@@ -118,11 +118,11 @@ func Make(
 ) *Raft {
 	// Your initialization code here (2A, 2B, 2C).
 	rf := &Raft{
-		peers:     peers,
-		persister: persister,
-		me:        me,
-		dead:      0,
-		applyCh:   applyCh,
+		peers:         peers,
+		persister:     persister,
+		me:            me,
+		dead:          0,
+		commitTrigger: make(chan bool),
 
 		currentTerm: 0,                               // initialized to 0 on first boot, increases monotonically
 		votedFor:    voteForNull,                     // null on startup
@@ -148,6 +148,9 @@ func Make(
 
 	// start ticker goroutine to start elections
 	go rf.ticker()
+
+	// start committer goroutine to wait for commit trigger signal, advance lastApplied and apply msg to client
+	go rf.committer(rf.commitTrigger, applyCh)
 
 	return rf
 }
@@ -211,6 +214,25 @@ func (rf *Raft) winElection() {
 	for i := range rf.matchIndex {
 		rf.matchIndex[i] = 0
 	}
+	// but i know my own highest log entry
+	rf.matchIndex[rf.me] = lastLogIndex
+}
+
+// is my log more up-to-date compared to other's
+// Raft determines which of two logs is more up-to-date
+// by comparing the index and term of the last entries in the logs
+func (rf *Raft) isMyLogMoreUpToDate(index int, term int) bool {
+	// If the logs have last entries with different terms,
+	// then the log with the later term is more up-to-date
+	myLastLogTerm := rf.log[len(rf.log)-1].Term
+	if myLastLogTerm != term {
+		return myLastLogTerm > term
+	}
+
+	// If the logs end with the same term,
+	// then whichever log is longer is more up-to-date
+	myLastLogIndex := rf.log[len(rf.log)-1].Index
+	return myLastLogIndex > index
 }
 
 /************************* Persist *******************************************/
@@ -304,7 +326,8 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	}
 
 	Debug(rf, dVote, "C%d asking for Vote, T%d", args.CandidateId, args.Term)
-	if rf.votedFor == voteForNull || rf.votedFor == args.CandidateId {
+	if (rf.votedFor == voteForNull || rf.votedFor == args.CandidateId) &&
+		!rf.isMyLogMoreUpToDate(args.LastLogIndex, args.LastLogTerm) {
 		// If votedFor is nul or candidateId,
 		// and candidate's log is at least as up-to-date as receiver's log,
 		// grant vote
@@ -406,8 +429,8 @@ func (rf *Raft) collectVote(term int, grant <-chan bool) {
 			if rf.state != Candidate || rf.currentTerm != term {
 				rf.mu.Unlock()
 			} else {
-				Debug(rf, dLeader, "Achieved Majority for T%d (%d), converting to Leader", rf.currentTerm, cnt)
 				rf.winElection()
+				Debug(rf, dLeader, "Achieved Majority for T%d (%d), converting to Leader, NI:%v, MI:%v", rf.currentTerm, cnt, rf.nextIndex, rf.matchIndex)
 				rf.mu.Unlock()
 				go rf.pacemaker(term)
 			}
@@ -418,6 +441,7 @@ func (rf *Raft) collectVote(term int, grant <-chan bool) {
 // The ticker go routine starts a new election if this peer hasn't received heartbeats recently.
 func (rf *Raft) ticker() {
 	var sleepDuration time.Duration
+	// long-run singleton go routine, should check if killed
 	for !rf.killed() {
 		// Your code here to check if a leader election should
 		// be started and to randomize sleeping time using
@@ -507,6 +531,9 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		return
 	}
 
+	Debug(rf, dTimer, "Resetting ELT, received %s T%d", intentOfAppendEntriesRPC(args), args.Term)
+	rf.electionAlarm = nextElectionAlarm()
+
 	if len(rf.log) <= args.PrevLogIndex || rf.log[args.PrevLogIndex].Term != args.PrevLogTerm {
 		// Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm
 		return
@@ -529,28 +556,31 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		rf.stepDown(args.Term)
 	}
 
-	Debug(rf, dTimer, "Resetting ELT, received %s T%d", intentOfAppendEntriesRPC(args), args.Term)
-	rf.electionAlarm = nextElectionAlarm()
-
 	if len(args.Entries) > 0 {
 		// If an existing entry conflicts with a new one (same index but different terms),
 		// delete the existing entry and all that follow it
+		Debug(rf, dLog, "Received: %v from S%d at T%d", args.Entries, args.LeaderId, args.Term)
 		existingEntries := rf.log[args.PrevLogIndex+1:]
 		var i int
 		for i = 0; i < min(len(existingEntries), len(args.Entries)); i++ {
 			if existingEntries[i].Term != args.Entries[i].Term {
+				Debug(rf, dLog, "Discard conflicts: %v", rf.log[args.PrevLogIndex+1+i:])
+				rf.log = rf.log[:args.PrevLogIndex+1+i]
 				break
 			}
 		}
-		// Append any new entries not already in the log
-		rf.log = append(rf.log[:args.PrevLogIndex+1+i], args.Entries[i:]...)
+		if i < len(args.Entries) {
+			// Append any new entries not already in the log
+			Debug(rf, dLog, "Append new: %v from i: %d", args.Entries[i:], i)
+			rf.log = append(rf.log, args.Entries[i:]...)
+		}
 	}
 
 	if args.LeaderCommit > rf.commitIndex {
 		// If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
 		rf.commitIndex = min(args.LeaderCommit, rf.log[len(rf.log)-1].Index)
 		// going to commit
-		go rf.commit()
+		go func() { rf.commitTrigger <- true }()
 	}
 }
 
@@ -607,11 +637,12 @@ func (rf *Raft) appendEntries(server int, term int) {
 			rf.stepDown(reply.Term)
 		}
 
-		if l := len(args.Entries); l > 0 {
+		if rf.state == Leader {
 			if reply.Success {
 				// If successful: update nextIndex and matchIndex for follower
-				rf.nextIndex[server] = args.Entries[l-1].Index + 1
-				rf.matchIndex[server] = args.Entries[l-1].Index
+				rf.nextIndex[server] = args.PrevLogIndex + len(args.Entries) + 1
+				rf.matchIndex[server] = args.PrevLogIndex + len(args.Entries)
+				Debug(rf, dLog, "%s RPC -> S%d success, updated NI:%v, MI:%v", intentOfAppendEntriesRPC(args), server, rf.nextIndex, rf.matchIndex)
 				go rf.checkCommit(term)
 			} else {
 				// If AppendEntries fails because of log inconsistency:
@@ -646,7 +677,7 @@ func (rf *Raft) Start(command interface{}) (index int, term int, isLeader bool) 
 		return
 	}
 
-	index = rf.log[len(rf.log)-1].Index + 1
+	index = rf.nextIndex[rf.me]
 	term = rf.currentTerm
 	isLeader = true
 
@@ -656,6 +687,8 @@ func (rf *Raft) Start(command interface{}) (index int, term int, isLeader bool) 
 		Term:    term,
 		Command: command,
 	})
+	rf.nextIndex[rf.me]++
+	rf.matchIndex[rf.me] = index
 	Debug(rf, dLog2, "Received log: %v, with NI:%v, MI:%v", rf.log[len(rf.log)-1], rf.nextIndex, rf.matchIndex)
 
 	rf.mu.Unlock()
@@ -674,16 +707,7 @@ func (rf *Raft) Start(command interface{}) (index int, term int, isLeader bool) 
 // Upon election: send initial empty AppendEntries RPCs (heartbeat) to each server
 // repeat during idle periods to prevent election timeouts
 func (rf *Raft) pacemaker(term int) {
-	// only Leader can start pacemaker
 	// Leader's pacemaker only last for its current term
-	rf.mu.Lock()
-	if rf.state != Leader {
-		s := "Not a Leader, but start heartbeat"
-		Debug(rf, dError, s)
-		panic(s)
-	}
-	rf.mu.Unlock()
-
 	for !rf.killed() {
 		rf.mu.Lock()
 		// re-check state and term each time, before broadcast
@@ -718,7 +742,13 @@ func (rf *Raft) checkCommit(term int) {
 		return
 	}
 
-	Debug(rf, dCommit, "L%d at T%d try to commit, with CI:%d, LL:%d", rf.me, term, rf.commitIndex, len(rf.log))
+	lastLogIndex := rf.log[len(rf.log)-1].Index
+	// Leader's commitIndex is already last one, nothing to commit
+	if rf.commitIndex >= lastLogIndex {
+		return
+	}
+
+	Debug(rf, dCommit, "Try to commit at T%d, with CI:%d, last log index:%d", term, rf.commitIndex, lastLogIndex)
 	// If there exists an N such that
 	// - N > commitIndex
 	// - a majority of matchIndex[i] ≥ N
@@ -740,27 +770,42 @@ func (rf *Raft) checkCommit(term int) {
 	}
 
 	// going to commit
-	go rf.commit()
+	go func() { rf.commitTrigger <- true }()
 }
 
-// The commit go routine compare commitIndex with lastApplied,
+// The committer go routine compare commitIndex with lastApplied,
 // increment lastApplied if commit-safe
 // and if any log applied, send to client through applyCh
-func (rf *Raft) commit() {
-	rf.mu.Lock()
-	defer rf.mu.Unlock()
+func (rf *Raft) committer(trigger <-chan bool, applyCh chan<- ApplyMsg) {
+	// long-run singleton go routine, should check if killed
+	for !rf.killed() {
+		// wait for fire signal (conditional variable should work too)
+		<-trigger
 
-	if rf.commitIndex > rf.lastApplied {
-		// If commitIndex > lastApplied:
-		// increment lastApplied,
-		// apply log[lastApplied] to state machine
-		rf.lastApplied++
-		logEntry := rf.log[rf.lastApplied]
-		Debug(rf, dCommit, "CI:%d > LA:%d, apply log: %s", rf.commitIndex, rf.lastApplied-1, logEntry)
-		rf.applyCh <- ApplyMsg{
-			CommandValid: true,
-			Command:      logEntry.Command,
-			CommandIndex: logEntry.Index,
+		rf.mu.Lock()
+		// try to apply as many as possible
+		for rf.commitIndex > rf.lastApplied {
+			// If commitIndex > lastApplied:
+			// increment lastApplied,
+			// apply log[lastApplied] to state machine
+			rf.lastApplied++
+			logEntry := rf.log[rf.lastApplied]
+			Debug(rf, dCommit, "CI:%d > LA:%d, apply log: %s", rf.commitIndex, rf.lastApplied-1, logEntry)
+
+			// release mutex before send ApplyMsg to applyCh
+			rf.mu.Unlock()
+
+			Debug(rf, dClient, "ApplyMsg: I:%d C:%v", logEntry.Index, logEntry.Command)
+			applyCh <- ApplyMsg{
+				CommandValid: true,
+				Command:      logEntry.Command,
+				CommandIndex: logEntry.Index,
+			}
+
+			// re-lock
+			rf.mu.Lock()
 		}
+
+		rf.mu.Unlock()
 	}
 }
