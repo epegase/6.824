@@ -28,10 +28,12 @@ const (
 	Follower  serverState = "F"
 )
 
+// set normal election timeout, with randomness
 func nextElectionAlarm() time.Time {
 	return time.Now().Add(time.Duration(randRange(electionTimeoutMin, electionTimeoutMax)) * time.Millisecond)
 }
 
+// set fast election timeout on startup, with randomness
 func initElectionAlarm() time.Time {
 	return time.Now().Add(time.Duration(randRange(0, electionTimeoutMax-electionTimeoutMin)) * time.Millisecond)
 }

@@ -158,7 +158,7 @@ def last_line(file: str) -> str:
 
 # fmt: off
 def run_tests(
-    tests: List[str]       = typer.Option([],     '--tests',           '-ts',   help='Specific test cases to run'),
+    tests: str             = typer.Option('',     '--tests',           '-ts',   help='Specific test cases to run, separate by ","'),
     sequential: bool       = typer.Option(False,  '--sequential',      '-s',    help='Run all test of each group in order'),
     workers: int           = typer.Option(1,      '--workers',         '-p',    help='Number of parallel tasks'),
     iterations: int        = typer.Option(10,     '--iter',            '-n',    help='Number of iterations to run'),
@@ -172,11 +172,11 @@ def run_tests(
     timing: bool           = typer.Option(False,  '--timing',          '-t',    help='Report timing, only works on macOS'),
     fast_fail: bool        = typer.Option(False,  '--fast-fail',       '-ff',   help='Exit on first failure'),
     until: str             = typer.Option('',     '--until',           '-u',    help='Run test cases until'),
-    part: str              = typer.Option('',     '--part',            '-pa',   help='Run test cases of some parts')
+    part: str              = typer.Option('',     '--part',            '-pa',   help='Run test cases of some parts, separate by ","')
     # fmt: on
 ):
     print(f"[green]Run as `{' '.join(sys.argv)}`[/green]\n")
-    tests = list(tests)
+    tests = [t for t in tests.strip().split(',') if t.strip()]
 
     if part:
         parts = part.strip().split(',')

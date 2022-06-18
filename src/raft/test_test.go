@@ -522,6 +522,7 @@ func TestRejoin2B(t *testing.T) {
 	// leader network failure
 	leader1 := cfg.checkOneLeader()
 	cfg.disconnect(leader1)
+	Debug(nil, dTest, "Disconnect leader1: %d", leader1)
 
 	// make old leader try to agree on some entries
 	cfg.rafts[leader1].Start(102)
@@ -529,19 +530,22 @@ func TestRejoin2B(t *testing.T) {
 	cfg.rafts[leader1].Start(104)
 
 	// new leader commits, also for index=2
-	cfg.one(103, 2, true)
+	cfg.one(103, servers-1, true)
 
 	// new leader network failure
 	leader2 := cfg.checkOneLeader()
 	cfg.disconnect(leader2)
+	Debug(nil, dTest, "Disconnect leader2: %d", leader2)
 
 	// old leader connected again
 	cfg.connect(leader1)
+	Debug(nil, dTest, "Rejoin leader1: %d", leader1)
 
 	cfg.one(104, 2, true)
 
 	// all together now
 	cfg.connect(leader2)
+	Debug(nil, dTest, "Rejoin leader2: %d", leader2)
 
 	cfg.one(105, servers, true)
 
@@ -550,6 +554,7 @@ func TestRejoin2B(t *testing.T) {
 
 func TestBackup2B(t *testing.T) {
 	servers := 5
+	iters := 50
 	cfg := make_config(t, servers, false, false)
 	defer cfg.cleanup()
 
@@ -562,9 +567,10 @@ func TestBackup2B(t *testing.T) {
 	cfg.disconnect((leader1 + 2) % servers)
 	cfg.disconnect((leader1 + 3) % servers)
 	cfg.disconnect((leader1 + 4) % servers)
+	Debug(nil, dTest, "Disconnect server: %d & %d & %d, make partition A", (leader1+2)%servers, (leader1+3)%servers, (leader1+4)%servers)
 
 	// submit lots of commands that won't commit
-	for i := 0; i < 50; i++ {
+	for i := 0; i < iters; i++ {
 		cfg.rafts[leader1].Start(rand.Int())
 	}
 
@@ -572,14 +578,16 @@ func TestBackup2B(t *testing.T) {
 
 	cfg.disconnect((leader1 + 0) % servers)
 	cfg.disconnect((leader1 + 1) % servers)
+	Debug(nil, dTest, "Disconnect server: %d & %d, all server unreachable", (leader1+0)%servers, (leader1+1)%servers)
 
 	// allow other partition to recover
 	cfg.connect((leader1 + 2) % servers)
 	cfg.connect((leader1 + 3) % servers)
 	cfg.connect((leader1 + 4) % servers)
+	Debug(nil, dTest, "Rejoin server: %d & %d & %d, bring partition A to life", (leader1+2)%servers, (leader1+3)%servers, (leader1+4)%servers)
 
 	// lots of successful commands to new group.
-	for i := 0; i < 50; i++ {
+	for i := 0; i < iters; i++ {
 		cfg.one(rand.Int(), 3, true)
 	}
 
@@ -590,9 +598,10 @@ func TestBackup2B(t *testing.T) {
 		other = (leader2 + 1) % servers
 	}
 	cfg.disconnect(other)
+	Debug(nil, dTest, "Disconnect server: %d, remove it from partition A", other)
 
 	// lots more commands that won't commit
-	for i := 0; i < 50; i++ {
+	for i := 0; i < iters; i++ {
 		cfg.rafts[leader2].Start(rand.Int())
 	}
 
@@ -605,9 +614,10 @@ func TestBackup2B(t *testing.T) {
 	cfg.connect((leader1 + 0) % servers)
 	cfg.connect((leader1 + 1) % servers)
 	cfg.connect(other)
+	Debug(nil, dTest, "Rejoin server: %d & %d & %d, bring partition B to life", (leader1+0)%servers, (leader1+1)%servers, other)
 
 	// lots of successful commands to new group.
-	for i := 0; i < 50; i++ {
+	for i := 0; i < iters; i++ {
 		cfg.one(rand.Int(), 3, true)
 	}
 

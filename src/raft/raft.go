@@ -191,7 +191,6 @@ func (rf *Raft) stepDown(term int) {
 	rf.state = Follower
 	rf.currentTerm = term
 	rf.votedFor = voteForNull
-	rf.electionAlarm = nextElectionAlarm()
 	rf.nextIndex = nil
 	rf.matchIndex = nil
 }
@@ -559,19 +558,19 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	if len(args.Entries) > 0 {
 		// If an existing entry conflicts with a new one (same index but different terms),
 		// delete the existing entry and all that follow it
-		Debug(rf, dLog, "Received: %v from S%d at T%d", args.Entries, args.LeaderId, args.Term)
+		Debug(rf, dInfo, "Received: %v from S%d at T%d", args.Entries, args.LeaderId, args.Term)
 		existingEntries := rf.log[args.PrevLogIndex+1:]
 		var i int
 		for i = 0; i < min(len(existingEntries), len(args.Entries)); i++ {
 			if existingEntries[i].Term != args.Entries[i].Term {
-				Debug(rf, dLog, "Discard conflicts: %v", rf.log[args.PrevLogIndex+1+i:])
+				Debug(rf, dInfo, "Discard conflicts: %v", rf.log[args.PrevLogIndex+1+i:])
 				rf.log = rf.log[:args.PrevLogIndex+1+i]
 				break
 			}
 		}
 		if i < len(args.Entries) {
 			// Append any new entries not already in the log
-			Debug(rf, dLog, "Append new: %v from i: %d", args.Entries[i:], i)
+			Debug(rf, dInfo, "Append new: %v from i: %d", args.Entries[i:], i)
 			rf.log = append(rf.log, args.Entries[i:]...)
 		}
 	}
@@ -610,7 +609,7 @@ func (rf *Raft) constructAppendEntriesArgs(server int) *AppendEntriesArgs {
 
 // send a AppendEntries RPC to a server
 func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *AppendEntriesReply) bool {
-	Debug(rf, dLog, "T%d -> S%d Sending %s, PLI:%d PLT:%d LC:%d - %v", args.Term, server, intentOfAppendEntriesRPC(args), args.PrevLogIndex, args.PrevLogTerm, args.LeaderCommit, args.Entries)
+	Debug(rf, dInfo, "T%d -> S%d Sending %s, PLI:%d PLT:%d LC:%d - %v", args.Term, server, intentOfAppendEntriesRPC(args), args.PrevLogIndex, args.PrevLogTerm, args.LeaderCommit, args.Entries)
 	ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)
 	return ok
 }
@@ -635,6 +634,7 @@ func (rf *Raft) appendEntries(server int, term int) {
 			// If RPC response contains term T > currentTerm: set currentTerm = T, convert to follower
 			Debug(rf, dTerm, "%s <- S%d Term is higher(%d > %d), following", intentOfAppendEntriesRPC(args), server, reply.Term, rf.currentTerm)
 			rf.stepDown(reply.Term)
+			rf.electionAlarm = nextElectionAlarm()
 		}
 
 		if rf.state == Leader {
