@@ -31,7 +31,7 @@ b6143938e1a4a0eb1f27f121acdde63c
 
 - [ ] LEC 7: [Fault Tolerance: Raft (2)](https://pdos.csail.mit.edu/6.824/notes/l-raft2.txt), [video](https://youtu.be/h3JiQ_lnkE8) 
   - [ ] Preparation: Read [Raft (extended) (2014), Section 7 to end (but not Section 6)](https://pdos.csail.mit.edu/6.824/papers/raft-extended.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/raft2-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-raft2&lec=7)) 
-  - [ ] Assigned: [Final Project](https://pdos.csail.mit.edu/6.824/project.html)
+  - [x] Assigned: [Final Project](https://pdos.csail.mit.edu/6.824/project.html)
 
 - [x] LEC 8: Q&A Lab2 A+B 
   - [x] Preparation: ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-QAlab&lec=8))
