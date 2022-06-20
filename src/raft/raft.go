@@ -640,6 +640,10 @@ func (rf *Raft) appendEntries(server int, term int) {
 		if rf.state == Leader {
 			if reply.Success {
 				// If successful: update nextIndex and matchIndex for follower
+				// TODO:
+				// if network reorder, and to-update nextIndex < current nextIndex for a peer,
+				// does it matter? Or what need to do to handle this situation?
+				// Same as matchIndex
 				rf.nextIndex[server] = args.PrevLogIndex + len(args.Entries) + 1
 				rf.matchIndex[server] = args.PrevLogIndex + len(args.Entries)
 				Debug(rf, dLog, "%s RPC -> S%d success, updated NI:%v, MI:%v", intentOfAppendEntriesRPC(args), server, rf.nextIndex, rf.matchIndex)
