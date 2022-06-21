@@ -46,8 +46,22 @@ func intentOfAppendEntriesRPC(args *AppendEntriesArgs) string {
 	return "AE"
 }
 
+func dTopicOfAppendEntriesRPC(args *AppendEntriesArgs, defaultTopic logTopic) logTopic {
+	if len(args.Entries) == 0 {
+		return dHeart
+	}
+	return defaultTopic
+}
+
 func min(a, b int) int {
 	if a < b {
+		return a
+	}
+	return b
+}
+
+func max(a, b int) int {
+	if a > b {
 		return a
 	}
 	return b
@@ -93,6 +107,7 @@ const (
 	dVote    logTopic = "VOTE"
 	dWarn    logTopic = "WARN"
 	dConfig  logTopic = "CONF"
+	dHeart   logTopic = "HART"
 )
 
 var debugStart time.Time

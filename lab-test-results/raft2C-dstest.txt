@@ -1,0 +1,48 @@
+Run as `./dstest -p50 -n16 -l -g2 -m256 -ff -v -pa 2C -u Persist3`
+
+Running with 50 workers / 8 CPU cores available
+Running on CPU model: Intel(R) Core(TM) i5-8259U CPU @ 2.30GHz
+Running with verbosity level: 1
+
+Initial iterations: 16
+┏━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ Test           ┃ Failed ┃ Total ┃         Time ┃
+┡━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
+│ TestPersist12C │      0 │    16 │  6.28 ± 0.42 │
+│ TestPersist22C │      0 │    16 │ 20.27 ± 1.10 │
+│ TestPersist32C │      0 │    16 │  3.83 ± 0.41 │
+└────────────────┴────────┴───────┴──────────────┘
+Increasing iterations to 32
+┏━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ Test           ┃ Failed ┃ Total ┃         Time ┃
+┡━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
+│ TestPersist12C │      0 │    32 │  5.42 ± 1.02 │
+│ TestPersist22C │      0 │    32 │ 19.78 ± 1.57 │
+│ TestPersist32C │      0 │    32 │  2.77 ± 1.12 │
+└────────────────┴────────┴───────┴──────────────┘
+Increasing iterations to 64
+┏━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ Test           ┃ Failed ┃ Total ┃         Time ┃
+┡━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
+│ TestPersist12C │      0 │    64 │  5.03 ± 0.99 │
+│ TestPersist22C │      0 │    64 │ 19.27 ± 1.89 │
+│ TestPersist32C │      0 │    64 │  2.34 ± 1.04 │
+└────────────────┴────────┴───────┴──────────────┘
+Increasing iterations to 128
+┏━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ Test           ┃ Failed ┃ Total ┃         Time ┃
+┡━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
+│ TestPersist12C │      0 │   128 │  4.73 ± 0.95 │
+│ TestPersist22C │      0 │   128 │ 18.97 ± 1.55 │
+│ TestPersist32C │      0 │   128 │  2.04 ± 0.85 │
+└────────────────┴────────┴───────┴──────────────┘
+Increasing iterations to 256
+┏━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ Test           ┃ Failed ┃ Total ┃         Time ┃
+┡━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
+│ TestPersist12C │      0 │   256 │  4.57 ± 0.66 │
+│ TestPersist22C │      0 │   256 │ 18.89 ± 1.42 │
+│ TestPersist32C │      0 │   256 │  1.93 ± 0.61 │
+└────────────────┴────────┴───────┴──────────────┘
+
+Completed 496 iterations in total
