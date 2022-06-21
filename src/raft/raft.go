@@ -525,6 +525,11 @@ type AppendEntriesArgs struct {
 type AppendEntriesReply struct {
 	Term    int  // CurrentTerm, for leader to update itself
 	Success bool // true if follower contained entry matching prevLogIndex and prevLogTerm
+
+	// OPTIMIZATION
+	XTerm  int // term in the conflicting entry (if any)
+	XIndex int // index of first entry with that XTerm term (if any)
+	XLen   int // log length
 }
 
 /********************** AppendEntries RPC handler *****************************/
@@ -546,8 +551,21 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	Debug(rf, dTimer, "Resetting ELT, received %s T%d", intentOfAppendEntriesRPC(args), args.Term)
 	rf.electionAlarm = nextElectionAlarm()
 
-	if len(rf.Log) <= args.PrevLogIndex || rf.Log[args.PrevLogIndex].Term != args.PrevLogTerm {
-		// Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm
+	// Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm
+	if l := len(rf.Log); l <= args.PrevLogIndex {
+		// OPTIMIZATION: fast log roll back
+		reply.XLen = rf.Log[l-1].Index + 1
+		return
+	}
+	if t := rf.Log[args.PrevLogIndex].Term; t != args.PrevLogTerm {
+		// OPTIMIZATION: fast log roll back
+		reply.XTerm = t
+		for i := args.PrevLogIndex; i > -1; i-- {
+			reply.XIndex = rf.Log[i].Index
+			if rf.Log[i].Term != t {
+				break
+			}
+		}
 		return
 	}
 
@@ -671,7 +689,26 @@ func (rf *Raft) appendEntries(server int, term int) {
 			} else {
 				// If AppendEntries fails because of log inconsistency:
 				// decrement nextIndex and retry
-				rf.nextIndex[server]--
+
+				// OPTIMIZATION: fast log roll back
+				if reply.XLen != 0 && reply.XTerm == 0 {
+					// follower's log is too short
+					rf.nextIndex[server] = reply.XLen
+				} else {
+					for i := len(rf.Log) - 1; i > -1; i-- {
+						if rf.Log[i].Term == reply.XTerm {
+							// leader has XTerm
+							rf.nextIndex[server] = rf.Log[i].Index + 1
+							break
+						}
+						if rf.Log[i].Term < reply.XTerm {
+							// leader doesn't have XTerm
+							rf.nextIndex[server] = reply.XIndex
+							break
+						}
+					}
+				}
+
 				go rf.appendEntries(server, term)
 			}
 		}
