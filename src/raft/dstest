@@ -59,12 +59,12 @@ ALL_TEST_CASES = [
     'TestUnreliableAgree2C',
     'TestFigure8Unreliable2C',
     'TestReliableChurn2C',
-    'TestUnreliableChurn2C'
+    'TestUnreliableChurn2C',
     'TestSnapshotBasic2D',
     'TestSnapshotInstall2D',
     'TestSnapshotInstallUnreliable2D',
     'TestSnapshotInstallCrash2D',
-    'TestSnapshotAllCrash2D'
+    'TestSnapshotAllCrash2D',
 ]
 
 

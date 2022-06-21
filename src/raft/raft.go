@@ -97,8 +97,6 @@ type Raft struct {
 
 	nextIndex  []int // for each server, index of the next log entry to send to that server
 	matchIndex []int // for each server, index of hightest log entry known to be replicated on server
-
-	// TODO: misc
 }
 
 //
@@ -709,6 +707,7 @@ func (rf *Raft) appendEntries(server int, term int) {
 					}
 				}
 
+				// retry
 				go rf.appendEntries(server, term)
 			}
 		}

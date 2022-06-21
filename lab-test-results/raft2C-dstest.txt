@@ -1,48 +1,73 @@
-Run as `./dstest -p50 -n16 -l -g2 -m256 -ff -v -pa 2C -u Persist3`
+Run as `./dstest -p50 -n16 -l -g2 -m256 -ff -v -pa 2C`
 
 Running with 50 workers / 8 CPU cores available
 Running on CPU model: Intel(R) Core(TM) i5-8259U CPU @ 2.30GHz
 Running with verbosity level: 1
 
 Initial iterations: 16
-┏━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
-┃ Test           ┃ Failed ┃ Total ┃         Time ┃
-┡━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
-│ TestPersist12C │      0 │    16 │  6.28 ± 0.42 │
-│ TestPersist22C │      0 │    16 │ 20.27 ± 1.10 │
-│ TestPersist32C │      0 │    16 │  3.83 ± 0.41 │
-└────────────────┴────────┴───────┴──────────────┘
+┏━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ Test                    ┃ Failed ┃ Total ┃         Time ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
+│ TestPersist12C          │      0 │    16 │  5.56 ± 1.02 │
+│ TestPersist22C          │      0 │    16 │ 20.31 ± 1.43 │
+│ TestPersist32C          │      0 │    16 │  2.77 ± 0.97 │
+│ TestFigure82C           │      0 │    16 │ 33.05 ± 3.45 │
+│ TestUnreliableAgree2C   │      0 │    16 │  2.85 ± 1.12 │
+│ TestFigure8Unreliable2C │      0 │    16 │ 36.35 ± 3.61 │
+│ TestReliableChurn2C     │      0 │    16 │ 17.62 ± 0.97 │
+│ TestUnreliableChurn2C   │      0 │    16 │ 17.79 ± 0.96 │
+└─────────────────────────┴────────┴───────┴──────────────┘
 Increasing iterations to 32
-┏━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
-┃ Test           ┃ Failed ┃ Total ┃         Time ┃
-┡━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
-│ TestPersist12C │      0 │    32 │  5.42 ± 1.02 │
-│ TestPersist22C │      0 │    32 │ 19.78 ± 1.57 │
-│ TestPersist32C │      0 │    32 │  2.77 ± 1.12 │
-└────────────────┴────────┴───────┴──────────────┘
+┏━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ Test                    ┃ Failed ┃ Total ┃         Time ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
+│ TestPersist12C          │      0 │    32 │  5.48 ± 0.85 │
+│ TestPersist22C          │      0 │    32 │ 19.73 ± 1.33 │
+│ TestPersist32C          │      0 │    32 │  2.87 ± 0.85 │
+│ TestFigure82C           │      0 │    32 │ 32.79 ± 3.10 │
+│ TestUnreliableAgree2C   │      0 │    32 │  2.72 ± 0.84 │
+│ TestFigure8Unreliable2C │      0 │    32 │ 37.21 ± 3.73 │
+│ TestReliableChurn2C     │      0 │    32 │ 17.52 ± 0.75 │
+│ TestUnreliableChurn2C   │      0 │    32 │ 17.53 ± 0.78 │
+└─────────────────────────┴────────┴───────┴──────────────┘
 Increasing iterations to 64
-┏━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
-┃ Test           ┃ Failed ┃ Total ┃         Time ┃
-┡━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
-│ TestPersist12C │      0 │    64 │  5.03 ± 0.99 │
-│ TestPersist22C │      0 │    64 │ 19.27 ± 1.89 │
-│ TestPersist32C │      0 │    64 │  2.34 ± 1.04 │
-└────────────────┴────────┴───────┴──────────────┘
+┏━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ Test                    ┃ Failed ┃ Total ┃         Time ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
+│ TestPersist12C          │      0 │    64 │  5.17 ± 0.78 │
+│ TestPersist22C          │      0 │    64 │ 19.52 ± 1.53 │
+│ TestPersist32C          │      0 │    64 │  2.50 ± 0.58 │
+│ TestFigure82C           │      0 │    64 │ 32.79 ± 3.21 │
+│ TestUnreliableAgree2C   │      0 │    64 │  2.53 ± 0.67 │
+│ TestFigure8Unreliable2C │      0 │    64 │ 36.45 ± 2.62 │
+│ TestReliableChurn2C     │      0 │    64 │ 17.29 ± 0.61 │
+│ TestUnreliableChurn2C   │      0 │    64 │ 17.28 ± 0.59 │
+└─────────────────────────┴────────┴───────┴──────────────┘
 Increasing iterations to 128
-┏━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
-┃ Test           ┃ Failed ┃ Total ┃         Time ┃
-┡━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
-│ TestPersist12C │      0 │   128 │  4.73 ± 0.95 │
-│ TestPersist22C │      0 │   128 │ 18.97 ± 1.55 │
-│ TestPersist32C │      0 │   128 │  2.04 ± 0.85 │
-└────────────────┴────────┴───────┴──────────────┘
+┏━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ Test                    ┃ Failed ┃ Total ┃         Time ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
+│ TestPersist12C          │      0 │   128 │  5.23 ± 0.62 │
+│ TestPersist22C          │      0 │   128 │ 19.67 ± 1.23 │
+│ TestPersist32C          │      0 │   128 │  2.71 ± 0.55 │
+│ TestFigure82C           │      0 │   128 │ 32.69 ± 2.80 │
+│ TestUnreliableAgree2C   │      0 │   128 │  2.50 ± 0.61 │
+│ TestFigure8Unreliable2C │      0 │   128 │ 36.70 ± 3.22 │
+│ TestReliableChurn2C     │      0 │   128 │ 17.31 ± 0.48 │
+│ TestUnreliableChurn2C   │      0 │   128 │ 17.24 ± 0.49 │
+└─────────────────────────┴────────┴───────┴──────────────┘
 Increasing iterations to 256
-┏━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
-┃ Test           ┃ Failed ┃ Total ┃         Time ┃
-┡━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
-│ TestPersist12C │      0 │   256 │  4.57 ± 0.66 │
-│ TestPersist22C │      0 │   256 │ 18.89 ± 1.42 │
-│ TestPersist32C │      0 │   256 │  1.93 ± 0.61 │
-└────────────────┴────────┴───────┴──────────────┘
+┏━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ Test                    ┃ Failed ┃ Total ┃         Time ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
+│ TestPersist12C          │      0 │   256 │  5.24 ± 0.63 │
+│ TestPersist22C          │      0 │   256 │ 19.68 ± 1.32 │
+│ TestPersist32C          │      0 │   256 │  2.71 ± 0.51 │
+│ TestFigure82C           │      0 │   256 │ 32.92 ± 2.77 │
+│ TestUnreliableAgree2C   │      0 │   256 │  2.62 ± 0.62 │
+│ TestFigure8Unreliable2C │      0 │   256 │ 36.79 ± 3.07 │
+│ TestReliableChurn2C     │      0 │   256 │ 17.37 ± 0.45 │
+│ TestUnreliableChurn2C   │      0 │   256 │ 17.32 ± 0.50 │
+└─────────────────────────┴────────┴───────┴──────────────┘
 
 Completed 496 iterations in total
