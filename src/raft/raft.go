@@ -82,9 +82,11 @@ type Raft struct {
 
 	// persistent state on all servers, updated on stable storage before responding to RPCs
 
-	CurrentTerm int        // latest term server has seen
-	VotedFor    int        // candidateId that received vote in current term (or null if none)
-	Log         []LogEntry // log entries, has at least ONE log
+	CurrentTerm       int        // latest term server has seen
+	VotedFor          int        // candidateId that received vote in current term (or null if none)
+	Log               []LogEntry // log entries
+	LastIncludedIndex int        // index of the log entry that before the start of Log
+	LastIncludedTerm  int        // term of the log entry that before the start of log
 
 	// volatile state on all servers
 
@@ -124,9 +126,11 @@ func Make(
 		dead:          0,
 		commitTrigger: make(chan bool),
 
-		CurrentTerm: 0,                               // initialized to 0 on first boot, increases monotonically
-		VotedFor:    voteForNull,                     // null on startup
-		Log:         []LogEntry{{Index: 0, Term: 0}}, // a placeholder log to make life easier
+		CurrentTerm:       0,           // initialized to 0 on first boot, increases monotonically
+		VotedFor:          voteForNull, // null on startup
+		Log:               []LogEntry{},
+		LastIncludedIndex: 0, // initialized to 0
+		LastIncludedTerm:  0, // initialized to 0
 
 		commitIndex:   0, // initialized to 0, increases monotonically
 		lastApplied:   0, // initialized to 0, increases monotonically
@@ -140,10 +144,7 @@ func Make(
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
 
-	lastLogIndex := 0
-	if l := len(rf.Log); l > 0 {
-		lastLogIndex = rf.Log[l-1].Index
-	}
+	lastLogIndex, _ := rf.lastLogIndexAndTerm()
 	Debug(rf, dClient, "Started at T:%d LLI:%d", rf.CurrentTerm, lastLogIndex)
 
 	// start ticker goroutine to start elections
@@ -197,6 +198,33 @@ func (rf *Raft) stepDown(term int) {
 	rf.persist()
 }
 
+// is my log more up-to-date compared to other's, with mutex held
+// Raft determines which of two logs is more up-to-date
+// by comparing the index and term of the last entries in the logs
+func (rf *Raft) isMyLogMoreUpToDate(index int, term int) bool {
+	// If the logs have last entries with different terms,
+	// then the log with the later term is more up-to-date
+	myLastLogIndex, myLastLogTerm := rf.lastLogIndexAndTerm()
+	if myLastLogTerm != term {
+		return myLastLogTerm > term
+	}
+
+	// If the logs end with the same term,
+	// then whichever log is longer is more up-to-date
+	return myLastLogIndex > index
+}
+
+// index and term of last log entry, with mutex held
+func (rf *Raft) lastLogIndexAndTerm() (index, term int) {
+	index, term = rf.LastIncludedIndex, rf.LastIncludedTerm
+	if l := len(rf.Log); l > 0 {
+		index, term = rf.Log[l-1].Index, rf.Log[l-1].Term
+	}
+	return
+}
+
+/************************* Election (2A) **************************************/
+
 // candidate wins election, comes to power, with mutex held
 func (rf *Raft) winElection() {
 	rf.state = Leader
@@ -204,7 +232,7 @@ func (rf *Raft) winElection() {
 	// Reinitialized after election
 
 	// initialized to leader last log index + 1
-	lastLogIndex := rf.Log[len(rf.Log)-1].Index
+	lastLogIndex, _ := rf.lastLogIndexAndTerm()
 	rf.nextIndex = make([]int, len(rf.peers))
 	for i := range rf.nextIndex {
 		rf.nextIndex[i] = lastLogIndex + 1
@@ -218,83 +246,6 @@ func (rf *Raft) winElection() {
 	// but i know my own highest log entry
 	rf.matchIndex[rf.me] = lastLogIndex
 }
-
-// is my log more up-to-date compared to other's, with mutex held
-// Raft determines which of two logs is more up-to-date
-// by comparing the index and term of the last entries in the logs
-func (rf *Raft) isMyLogMoreUpToDate(index int, term int) bool {
-	// If the logs have last entries with different terms,
-	// then the log with the later term is more up-to-date
-	myLastLogTerm := rf.Log[len(rf.Log)-1].Term
-	if myLastLogTerm != term {
-		return myLastLogTerm > term
-	}
-
-	// If the logs end with the same term,
-	// then whichever log is longer is more up-to-date
-	myLastLogIndex := rf.Log[len(rf.Log)-1].Index
-	return myLastLogIndex > index
-}
-
-/************************* Persist *******************************************/
-
-//
-// save Raft's persistent state to stable storage, with mutex held
-// where it can later be retrieved after a crash and restart.
-// see paper's Figure 2 for a description of what should be persistent.
-//
-func (rf *Raft) persist() {
-	// Your code here (2C).
-	w := new(bytes.Buffer)
-	e := labgob.NewEncoder(w)
-	if e.Encode(rf.CurrentTerm) != nil ||
-		e.Encode(rf.VotedFor) != nil ||
-		e.Encode(rf.Log) != nil {
-		Debug(rf, dError, "Write persistence failed")
-	} else {
-		Debug(rf, dPersist, "Saved state T:%d VF:%d, LLI:%d", rf.CurrentTerm, rf.VotedFor, rf.Log[len(rf.Log)-1].Index)
-		data := w.Bytes()
-		rf.persister.SaveRaftState(data)
-	}
-}
-
-// restore previously persisted state.
-func (rf *Raft) readPersist(data []byte) {
-	if data == nil || len(data) < 1 { // bootstrap without any state?
-		return
-	}
-	// Your code here (2C).
-	r := bytes.NewBuffer(data)
-	d := labgob.NewDecoder(r)
-	var currentTerm, votedFor int
-	var logs []LogEntry
-	if d.Decode(&currentTerm) != nil ||
-		d.Decode(&votedFor) != nil ||
-		d.Decode(&logs) != nil {
-		Debug(rf, dError, "Read broken persistence")
-	} else {
-		rf.CurrentTerm = currentTerm
-		rf.VotedFor = votedFor
-		rf.Log = logs
-	}
-}
-
-// A service wants to switch to snapshot. Only do so if Raft hasn't
-// have more recent info since it communicate the snapshot on applyCh.
-func (rf *Raft) CondInstallSnapshot(lastIncludedTerm int, lastIncludedIndex int, snapshot []byte) bool {
-	// Your code here (2D).
-	return true
-}
-
-// the service says it has created a snapshot that has
-// all info up to and including index. this means the
-// service no longer needs the log through (and including)
-// that index. Raft should now trim its log as much as possible.
-func (rf *Raft) Snapshot(index int, snapshot []byte) {
-	// Your code here (2D).
-}
-
-/************************* RequestVote ****************************************/
 
 type RequestVoteArgs struct {
 	// Your data here (2A, 2B).
@@ -311,6 +262,7 @@ type RequestVoteReply struct {
 }
 
 /********************** RequestVote RPC handler *******************************/
+
 func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
@@ -349,11 +301,12 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 
 // make RequestVote RPC args, with mutex held
 func (rf *Raft) constructRequestVoteArgs() *RequestVoteArgs {
+	lastLogIndex, lastLogTerm := rf.lastLogIndexAndTerm()
 	return &RequestVoteArgs{
 		Term:         rf.CurrentTerm,
 		CandidateId:  rf.me,
-		LastLogIndex: rf.Log[len(rf.Log)-1].Index,
-		LastLogTerm:  rf.Log[len(rf.Log)-1].Term,
+		LastLogIndex: lastLogIndex,
+		LastLogTerm:  lastLogTerm,
 	}
 }
 
@@ -509,7 +462,7 @@ func (rf *Raft) ticker() {
 	}
 }
 
-/************************* Log ************************************************/
+/************************* Log (2B) *******************************************/
 
 type AppendEntriesArgs struct {
 	Term         int        // leader's term
@@ -550,17 +503,26 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	rf.electionAlarm = nextElectionAlarm()
 
 	// Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm
-	if l := len(rf.Log); l <= args.PrevLogIndex {
-		// OPTIMIZATION: fast log roll back
-		reply.XLen = rf.Log[l-1].Index + 1
+	lastLogIndex, _ := rf.lastLogIndexAndTerm()
+	if lastLogIndex < args.PrevLogIndex {
+		// OPTIMIZATION: fast log roll back, follower's log is too short
+		reply.XLen = lastLogIndex + 1
 		return
 	}
-	if t := rf.Log[args.PrevLogIndex].Term; t != args.PrevLogTerm {
-		// OPTIMIZATION: fast log roll back
-		reply.XTerm = t
-		for i := args.PrevLogIndex; i > -1; i-- {
+
+	// lastLogIndex >= args.PrevLogIndex, follower's log is long enough to cover args.PrevLogIndex
+	var prevLogTerm int
+	if i := args.PrevLogIndex - rf.LastIncludedIndex - 1; i == -1 { // args.PrevLogIndex == rf.LastIncludedIndex
+		prevLogTerm = rf.LastIncludedTerm
+	} else {
+		prevLogTerm = rf.Log[i].Term
+	}
+	if prevLogTerm != args.PrevLogTerm {
+		// OPTIMIZATION: fast log roll back: set term of conflicting entry and index of first entry with that term
+		reply.XTerm = prevLogTerm
+		for i := args.PrevLogIndex - rf.LastIncludedIndex - 1; i > -1; i-- {
 			reply.XIndex = rf.Log[i].Index
-			if rf.Log[i].Term != t {
+			if rf.Log[i].Term != prevLogTerm {
 				break
 			}
 		}
@@ -588,13 +550,13 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		// If an existing entry conflicts with a new one (same index but different terms),
 		// delete the existing entry and all that follow it
 		Debug(rf, dInfo, "Received: %v from S%d at T%d", args.Entries, args.LeaderId, args.Term)
-		existingEntries := rf.Log[args.PrevLogIndex+1:]
+		existingEntries := rf.Log[args.PrevLogIndex-rf.LastIncludedIndex:]
 		var i int
 		needPersist := false
 		for i = 0; i < min(len(existingEntries), len(args.Entries)); i++ {
 			if existingEntries[i].Term != args.Entries[i].Term {
-				Debug(rf, dInfo, "Discard conflicts: %v", rf.Log[args.PrevLogIndex+1+i:])
-				rf.Log = rf.Log[:args.PrevLogIndex+1+i]
+				Debug(rf, dInfo, "Discard conflicts: %v", rf.Log[args.PrevLogIndex-rf.LastIncludedIndex+i:])
+				rf.Log = rf.Log[:args.PrevLogIndex-rf.LastIncludedIndex+i]
 				needPersist = true
 				break
 			}
@@ -613,7 +575,8 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	if args.LeaderCommit > rf.commitIndex {
 		// If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
-		rf.commitIndex = min(args.LeaderCommit, rf.Log[len(rf.Log)-1].Index)
+		lastLogIndex, _ := rf.lastLogIndexAndTerm()
+		rf.commitIndex = min(args.LeaderCommit, lastLogIndex)
 		// going to commit
 		go func() { rf.commitTrigger <- true }()
 	}
@@ -624,13 +587,17 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 // make AppendEntries RPC args, with mutex held
 func (rf *Raft) constructAppendEntriesArgs(server int) *AppendEntriesArgs {
 	prevLogIndex := rf.nextIndex[server] - 1
-	prevLogTerm := rf.Log[prevLogIndex].Term
+	prevLogTerm := rf.LastIncludedTerm
+	if i := prevLogIndex - rf.LastIncludedIndex - 1; i > -1 {
+		prevLogTerm = rf.Log[i].Term
+	}
 
 	var entries []LogEntry
+	lastLogIndex, _ := rf.lastLogIndexAndTerm()
 	// If last log index ≥ nextIndex for a follower:
 	// send AppendEntries RPC with log entries starting at nextIndex
-	if rf.Log[len(rf.Log)-1].Index >= rf.nextIndex[server] {
-		newEntries := rf.Log[rf.nextIndex[server]:]
+	if ni := rf.nextIndex[server]; lastLogIndex >= ni {
+		newEntries := rf.Log[ni-rf.LastIncludedIndex-1:]
 		entries = make([]LogEntry, len(newEntries))
 		copy(entries, newEntries)
 	}
@@ -695,15 +662,27 @@ func (rf *Raft) appendEntries(server int, term int) {
 					// follower's log is too short
 					rf.nextIndex[server] = reply.XLen
 				} else {
-					for i := len(rf.Log) - 1; i > -1; i-- {
-						if rf.Log[i].Term == reply.XTerm {
+					var entryIndex, entryTerm int
+					for i := len(rf.Log) - 1; ; i-- {
+						if i < 0 {
+							entryIndex, entryTerm = rf.lastLogIndexAndTerm()
+						} else {
+							entryIndex, entryTerm = rf.Log[i].Index, rf.Log[i].Term
+						}
+
+						if entryTerm == reply.XTerm {
 							// leader has XTerm
-							rf.nextIndex[server] = rf.Log[i].Index + 1
+							rf.nextIndex[server] = entryIndex + 1
 							break
 						}
-						if rf.Log[i].Term < reply.XTerm {
+						if entryTerm < reply.XTerm {
 							// leader doesn't have XTerm
 							rf.nextIndex[server] = reply.XIndex
+							break
+						}
+
+						if i < 0 {
+							// TODO: leader's log too short, need to install snapshot to follower
 							break
 						}
 					}
@@ -807,7 +786,8 @@ func (rf *Raft) checkCommit(term int) {
 	}
 
 	// Leader's commitIndex is already last one, nothing to commit
-	if rf.commitIndex >= rf.Log[len(rf.Log)-1].Index {
+	lastLogIndex, _ := rf.lastLogIndexAndTerm()
+	if rf.commitIndex >= lastLogIndex {
 		return
 	}
 
@@ -817,8 +797,8 @@ func (rf *Raft) checkCommit(term int) {
 	// - log[N].term == CurrentTerm:
 	// set commitIndex = N
 	oldCommitIndex := rf.commitIndex
-	for n := rf.commitIndex + 1; n < len(rf.Log); n++ {
-		if rf.Log[n].Term == term {
+	for n := rf.commitIndex + 1; n < len(rf.Log)+rf.LastIncludedIndex+1; n++ {
+		if rf.Log[n-rf.LastIncludedIndex-1].Term == term {
 			cnt := 1
 			for i := range rf.peers {
 				if i != rf.me && rf.matchIndex[i] >= n {
@@ -854,7 +834,7 @@ func (rf *Raft) committer(trigger <-chan bool, applyCh chan<- ApplyMsg) {
 			// increment lastApplied,
 			// apply log[lastApplied] to state machine
 			rf.lastApplied++
-			logEntry := rf.Log[rf.lastApplied]
+			logEntry := rf.Log[rf.lastApplied-rf.LastIncludedIndex-1]
 			Debug(rf, dClient, "CI:%d > LA:%d, apply log: %s", rf.commitIndex, rf.lastApplied-1, logEntry)
 
 			// release mutex before send ApplyMsg to applyCh
@@ -872,4 +852,69 @@ func (rf *Raft) committer(trigger <-chan bool, applyCh chan<- ApplyMsg) {
 
 		rf.mu.Unlock()
 	}
+}
+
+/************************* Persist (2C) ***************************************/
+
+//
+// save Raft's persistent state to stable storage, with mutex held
+// where it can later be retrieved after a crash and restart.
+// see paper's Figure 2 for a description of what should be persistent.
+//
+func (rf *Raft) persist() {
+	// Your code here (2C).
+	w := new(bytes.Buffer)
+	e := labgob.NewEncoder(w)
+	if e.Encode(rf.CurrentTerm) != nil ||
+		e.Encode(rf.VotedFor) != nil ||
+		e.Encode(rf.Log) != nil {
+		Debug(rf, dError, "Write persistence failed")
+	} else {
+		lastLogIndex, _ := rf.lastLogIndexAndTerm()
+		Debug(rf, dPersist, "Saved state T:%d VF:%d, LLI:%d", rf.CurrentTerm, rf.VotedFor, lastLogIndex)
+		data := w.Bytes()
+		rf.persister.SaveRaftState(data)
+	}
+}
+
+// restore previously persisted state.
+func (rf *Raft) readPersist(data []byte) {
+	if data == nil || len(data) < 1 { // bootstrap without any state?
+		return
+	}
+	// Your code here (2C).
+	r := bytes.NewBuffer(data)
+	d := labgob.NewDecoder(r)
+	var currentTerm, votedFor int
+	var logs []LogEntry
+	if d.Decode(&currentTerm) != nil ||
+		d.Decode(&votedFor) != nil ||
+		d.Decode(&logs) != nil {
+		Debug(rf, dError, "Read broken persistence")
+	} else {
+		rf.CurrentTerm = currentTerm
+		rf.VotedFor = votedFor
+		rf.Log = logs
+	}
+}
+
+/************************* Log Compaction (2D) ********************************/
+
+// A service wants to switch to snapshot. Only do so if Raft hasn't
+// have more recent info since it communicate the snapshot on applyCh.
+func (rf *Raft) CondInstallSnapshot(lastIncludedTerm int, lastIncludedIndex int, snapshot []byte) bool {
+	// Your code here (2D).
+	// Previously, this lab recommended that you implement a function called CondInstallSnapshot
+	// to avoid the requirement that snapshots and log entries sent on applyCh are coordinated.
+	// This vestigial API interface remains, but you are discouraged from implementing it:
+	// instead, we suggest that you simply have it return true.
+	return true
+}
+
+// the service says it has created a snapshot that has
+// all info up to and including index. this means the
+// service no longer needs the log through (and including)
+// that index. Raft should now trim its log as much as possible.
+func (rf *Raft) Snapshot(index int, snapshot []byte) {
+	// Your code here (2D).
 }
