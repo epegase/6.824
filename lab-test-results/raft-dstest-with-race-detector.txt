@@ -1,0 +1,34 @@
+Run as `./dstest -p8 -n128 -ff -v -r -pa 2A,2B,2C`
+
+Running with the race detector
+Running with 8 workers / 8 CPU cores available
+Running on CPU model: Intel(R) Core(TM) i5-8259U CPU @ 2.30GHz
+Running with verbosity level: 1
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ Test                    ┃ Failed ┃ Total ┃         Time ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
+│ TestInitialElection2A   │      0 │   128 │  3.57 ± 0.21 │
+│ TestReElection2A        │      0 │   128 │  6.14 ± 0.48 │
+│ TestManyElections2A     │      0 │   128 │  7.99 ± 0.95 │
+│ TestBasicAgree2B        │      0 │   128 │  0.97 ± 0.23 │
+│ TestRPCBytes2B          │      0 │   128 │  1.81 ± 0.24 │
+│ TestFollowerFailure2B   │      0 │   128 │  4.93 ± 0.24 │
+│ TestLeaderFailure2B     │      0 │   128 │  6.00 ± 0.28 │
+│ TestFailAgree2B         │      0 │   128 │  5.16 ± 0.87 │
+│ TestFailNoAgree2B       │      0 │   128 │  3.85 ± 0.30 │
+│ TestConcurrentStarts2B  │      0 │   128 │  0.94 ± 0.19 │
+│ TestRejoin2B            │      0 │   128 │  5.83 ± 1.07 │
+│ TestBackup2B            │      0 │   128 │ 16.60 ± 1.02 │
+│ TestCount2B             │      0 │   128 │  2.42 ± 0.13 │
+│ TestPersist12C          │      0 │   128 │  4.48 ± 0.48 │
+│ TestPersist22C          │      0 │   128 │ 19.03 ± 1.27 │
+│ TestPersist32C          │      0 │   128 │  1.80 ± 0.27 │
+│ TestFigure82C           │      0 │   128 │ 31.44 ± 2.72 │
+│ TestUnreliableAgree2C   │      0 │   128 │  2.13 ± 0.43 │
+│ TestFigure8Unreliable2C │      0 │   128 │ 44.94 ± 5.29 │
+│ TestReliableChurn2C     │      0 │   128 │ 16.78 ± 0.36 │
+│ TestUnreliableChurn2C   │      0 │   128 │ 16.75 ± 0.32 │
+└─────────────────────────┴────────┴───────┴──────────────┘
+
+Completed 128 iterations in total

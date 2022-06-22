@@ -630,7 +630,9 @@ func (rf *Raft) constructAppendEntriesArgs(server int) *AppendEntriesArgs {
 	// If last log index ≥ nextIndex for a follower:
 	// send AppendEntries RPC with log entries starting at nextIndex
 	if rf.Log[len(rf.Log)-1].Index >= rf.nextIndex[server] {
-		entries = rf.Log[rf.nextIndex[server]:]
+		newEntries := rf.Log[rf.nextIndex[server]:]
+		entries = make([]LogEntry, len(newEntries))
+		copy(entries, newEntries)
 	}
 
 	return &AppendEntriesArgs{
