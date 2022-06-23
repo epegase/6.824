@@ -1226,8 +1226,12 @@ func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash
 			cfg.one(rand.Int(), servers-1, true)
 		}
 
-		if cfg.LogSize() >= MAXLOGSIZE {
-			cfg.t.Fatalf("Log size too large")
+		if logSize := cfg.LogSize(); logSize >= MAXLOGSIZE {
+			for i := 0; i < cfg.n; i++ {
+				n := cfg.saved[i].RaftStateSize()
+				Debug(nil, dTest, "S%d have raft state size: %d", i, n)
+			}
+			cfg.t.Fatalf("Log size too large, %d >= %d", logSize, MAXLOGSIZE)
 		}
 		if disconnect {
 			// reconnect a follower, who maybe behind and

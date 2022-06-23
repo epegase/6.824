@@ -67,14 +67,25 @@ func (e LogEntry) String() string {
 	return fmt.Sprintf("{I:%d T:%d C:%s}", e.Index, e.Term, commandStr)
 }
 
+// snapshot command
+// received by Snapshot func, send through channel to snapshoter
+type snapshotCmd struct {
+	index    int
+	snapshot []byte
+}
+
 // A Go object implementing a single Raft peer.
 type Raft struct {
-	mu            sync.Mutex          // Lock to protect shared access to this peer's state
-	peers         []*labrpc.ClientEnd // RPC end points of all peers
-	persister     *Persister          // Object to hold this peer's persisted state
-	me            int                 // this peer's index into peers[]
-	dead          int32               // set by Kill()
-	commitTrigger chan bool           // tell committer to advance commit and apply msg to client
+	mu        sync.Mutex          // Lock to protect shared access to this peer's state
+	peers     []*labrpc.ClientEnd // RPC end points of all peers
+	persister *Persister          // Object to hold this peer's persisted state
+	me        int                 // this peer's index into peers[]
+	dead      int32               // set by Kill()
+
+	commitTrigger   chan bool        // tell committer to advance commit and apply msg to client
+	snapshotCh      chan snapshotCmd // tell snapshoter to take a snapshot
+	snapshotTrigger chan bool        // tell snapshoter to save delayed snapshot
+	quit            chan bool        // tell long-run goroutines to exit
 
 	// Your data here (2A, 2B, 2C).
 	// Look at the paper's Figure 2 for a description of what
@@ -120,11 +131,15 @@ func Make(
 ) *Raft {
 	// Your initialization code here (2A, 2B, 2C).
 	rf := &Raft{
-		peers:         peers,
-		persister:     persister,
-		me:            me,
-		dead:          0,
-		commitTrigger: make(chan bool),
+		peers:     peers,
+		persister: persister,
+		me:        me,
+		dead:      0,
+
+		commitTrigger:   make(chan bool),
+		snapshotCh:      make(chan snapshotCmd),
+		snapshotTrigger: make(chan bool),
+		quit:            make(chan bool, nLongRunGoroutine),
 
 		CurrentTerm:       0,           // initialized to 0 on first boot, increases monotonically
 		VotedFor:          voteForNull, // null on startup
@@ -151,7 +166,12 @@ func Make(
 	go rf.ticker()
 
 	// start committer goroutine to wait for commit trigger signal, advance lastApplied and apply msg to client
-	go rf.committer(rf.commitTrigger, applyCh)
+	go rf.committer(rf.commitTrigger, applyCh, rf.quit)
+
+	// start snapshoter goroutine to wait for snapshot command that will sent through snapshotCh
+	// if is leader, maybe keep a small amount of trailing log entries for lagging followers to catch up
+	// so leader's snapshot will be delayed and be triggered by snapshotTrigger each time leader's nextIndex updated
+	go rf.snapshoter(rf.snapshotTrigger, rf.snapshotCh, rf.quit)
 
 	return rf
 }
@@ -180,6 +200,14 @@ func (rf *Raft) GetState() (term int, isLeader bool) {
 func (rf *Raft) Kill() {
 	atomic.StoreInt32(&rf.dead, 1)
 	// Your code here, if desired.
+
+	// to terminate all long-run goroutines
+	go func() {
+		// quit committer, snapshoter
+		for i := 0; i < nLongRunGoroutine; i++ {
+			rf.quit <- true
+		}
+	}()
 }
 
 func (rf *Raft) killed() bool {
@@ -196,7 +224,21 @@ func (rf *Raft) stepDown(term int) {
 	rf.matchIndex = nil
 
 	rf.persist()
+
+	// once step down, trigger any delayed snapshot
+	go func() { rf.snapshotTrigger <- true }()
 }
+
+// index and term of last log entry, with mutex held
+func (rf *Raft) lastLogIndexAndTerm() (index, term int) {
+	index, term = rf.LastIncludedIndex, rf.LastIncludedTerm
+	if l := len(rf.Log); l > 0 {
+		index, term = rf.Log[l-1].Index, rf.Log[l-1].Term
+	}
+	return
+}
+
+/************************* Election (2A) **************************************/
 
 // is my log more up-to-date compared to other's, with mutex held
 // Raft determines which of two logs is more up-to-date
@@ -213,17 +255,6 @@ func (rf *Raft) isMyLogMoreUpToDate(index int, term int) bool {
 	// then whichever log is longer is more up-to-date
 	return myLastLogIndex > index
 }
-
-// index and term of last log entry, with mutex held
-func (rf *Raft) lastLogIndexAndTerm() (index, term int) {
-	index, term = rf.LastIncludedIndex, rf.LastIncludedTerm
-	if l := len(rf.Log); l > 0 {
-		index, term = rf.Log[l-1].Index, rf.Log[l-1].Term
-	}
-	return
-}
-
-/************************* Election (2A) **************************************/
 
 // candidate wins election, comes to power, with mutex held
 func (rf *Raft) winElection() {
@@ -512,8 +543,37 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	// lastLogIndex >= args.PrevLogIndex, follower's log is long enough to cover args.PrevLogIndex
 	var prevLogTerm int
-	if i := args.PrevLogIndex - rf.LastIncludedIndex - 1; i == -1 { // args.PrevLogIndex == rf.LastIncludedIndex
+	if i := args.PrevLogIndex - rf.LastIncludedIndex - 1; i == -1 {
+		// args.PrevLogIndex == rf.LastIncludedIndex
 		prevLogTerm = rf.LastIncludedTerm
+	} else if i < -1 {
+		// if i < -1 => args.PrevLogIndex < rf.LastIncludedIndex =>
+		// follower has committed PrevLogIndex log =>
+		// PrevLogIndex consistency check is already done =>
+		// it's OK to start log consistency check at rf.LastIncludedIndex
+		args.PrevLogIndex = rf.LastIncludedIndex
+		prevLogTerm = rf.LastIncludedTerm
+		// trim args.Entries to start after LastIncludedIndex
+		sameEntryInArgsEntries := false
+		for i := range args.Entries {
+			if args.Entries[i].Index == rf.LastIncludedIndex && args.Entries[i].Term == rf.LastIncludedTerm {
+				sameEntryInArgsEntries = true
+				if i == len(args.Entries)-1 {
+					// args.Entries end at LastIncludedIndex, so trim args.Entries to empty slice
+					args.Entries = make([]LogEntry, 0)
+				} else {
+					args.Entries = args.Entries[i+1:]
+				}
+				break
+			}
+		}
+		if !sameEntryInArgsEntries {
+			// not found LastIncludedIndex log entry in args.Entries =>
+			// args.Entries are all covered by LastIncludedIndex =>
+			// args.Entries are all committed =>
+			// safe to trim args.Entries to empty slice
+			args.Entries = make([]LogEntry, 0)
+		}
 	} else {
 		prevLogTerm = rf.Log[i].Term
 	}
@@ -646,13 +706,21 @@ func (rf *Raft) appendEntries(server int, term int) {
 			if reply.Success {
 				// If successful: update nextIndex and matchIndex for follower
 
+				oldNextIndex := rf.nextIndex[server]
 				// if network reorders RPC replies, and to-update nextIndex < current nextIndex for a peer,
 				// DON'T update nextIndex to smaller value (to avoid re-send log entries that follower already has)
 				// So is matchIndex
 				rf.nextIndex[server] = max(args.PrevLogIndex+len(args.Entries)+1, rf.nextIndex[server])
 				rf.matchIndex[server] = max(args.PrevLogIndex+len(args.Entries), rf.matchIndex[server])
 				Debug(rf, dTopicOfAppendEntriesRPC(args, dLog), "%s RPC -> S%d success, updated NI:%v, MI:%v", intentOfAppendEntriesRPC(args), server, rf.nextIndex, rf.matchIndex)
+
+				// matchIndex updated, maybe some log entries commit-able, going to check
 				go rf.checkCommit(term)
+
+				if rf.nextIndex[server] > oldNextIndex {
+					// nextIndex updated, tell snapshoter to check if any delayed snapshot command can be processed
+					go func() { rf.snapshotTrigger <- true }()
+				}
 			} else {
 				// If AppendEntries fails because of log inconsistency:
 				// decrement nextIndex and retry
@@ -821,11 +889,15 @@ func (rf *Raft) checkCommit(term int) {
 // The committer go routine compare commitIndex with lastApplied,
 // increment lastApplied if commit-safe
 // and if any log applied, send to client through applyCh
-func (rf *Raft) committer(trigger <-chan bool, applyCh chan<- ApplyMsg) {
+func (rf *Raft) committer(trigger <-chan bool, applyCh chan<- ApplyMsg, quit <-chan bool) {
 	// long-run singleton go routine, should check if killed
+LongRun:
 	for !rf.killed() {
-		// wait for fire signal (conditional variable should work too)
-		<-trigger
+		select {
+		case <-quit:
+			break LongRun // terminate long-run goroutine
+		case <-trigger: // wait for fire signal (conditional variable should work too)
+		}
 
 		rf.mu.Lock()
 		// try to apply as many as possible
@@ -856,6 +928,21 @@ func (rf *Raft) committer(trigger <-chan bool, applyCh chan<- ApplyMsg) {
 
 /************************* Persist (2C) ***************************************/
 
+// get raft instance state as bytes, with mutex held
+func (rf *Raft) raftState() []byte {
+	w := new(bytes.Buffer)
+	e := labgob.NewEncoder(w)
+	if e.Encode(rf.CurrentTerm) != nil ||
+		e.Encode(rf.VotedFor) != nil ||
+		e.Encode(rf.Log) != nil ||
+		e.Encode(rf.LastIncludedIndex) != nil ||
+		e.Encode(rf.LastIncludedTerm) != nil {
+		return nil
+	} else {
+		return w.Bytes()
+	}
+}
+
 //
 // save Raft's persistent state to stable storage, with mutex held
 // where it can later be retrieved after a crash and restart.
@@ -863,16 +950,11 @@ func (rf *Raft) committer(trigger <-chan bool, applyCh chan<- ApplyMsg) {
 //
 func (rf *Raft) persist() {
 	// Your code here (2C).
-	w := new(bytes.Buffer)
-	e := labgob.NewEncoder(w)
-	if e.Encode(rf.CurrentTerm) != nil ||
-		e.Encode(rf.VotedFor) != nil ||
-		e.Encode(rf.Log) != nil {
+	if data := rf.raftState(); data == nil {
 		Debug(rf, dError, "Write persistence failed")
 	} else {
-		lastLogIndex, _ := rf.lastLogIndexAndTerm()
-		Debug(rf, dPersist, "Saved state T:%d VF:%d, LLI:%d", rf.CurrentTerm, rf.VotedFor, lastLogIndex)
-		data := w.Bytes()
+		lastLogIndex, lastLogTerm := rf.lastLogIndexAndTerm()
+		Debug(rf, dPersist, "Saved state T:%d VF:%d, (LII:%d LIT:%d), (LLI:%d LLT:%d)", rf.CurrentTerm, rf.VotedFor, rf.LastIncludedIndex, rf.LastIncludedTerm, lastLogIndex, lastLogTerm)
 		rf.persister.SaveRaftState(data)
 	}
 }
@@ -885,16 +967,20 @@ func (rf *Raft) readPersist(data []byte) {
 	// Your code here (2C).
 	r := bytes.NewBuffer(data)
 	d := labgob.NewDecoder(r)
-	var currentTerm, votedFor int
+	var currentTerm, votedFor, lastIncludedIndex, lastIncludedTerm int
 	var logs []LogEntry
 	if d.Decode(&currentTerm) != nil ||
 		d.Decode(&votedFor) != nil ||
-		d.Decode(&logs) != nil {
+		d.Decode(&logs) != nil ||
+		d.Decode(&lastIncludedIndex) != nil ||
+		d.Decode(&lastIncludedTerm) != nil {
 		Debug(rf, dError, "Read broken persistence")
 	} else {
 		rf.CurrentTerm = currentTerm
 		rf.VotedFor = votedFor
 		rf.Log = logs
+		rf.LastIncludedIndex = lastIncludedIndex
+		rf.LastIncludedTerm = lastIncludedTerm
 	}
 }
 
@@ -917,4 +1003,97 @@ func (rf *Raft) CondInstallSnapshot(lastIncludedTerm int, lastIncludedIndex int,
 // that index. Raft should now trim its log as much as possible.
 func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	// Your code here (2D).
+	// no need to process immediately
+	// send to queue for background-goroutine snapshoter to process
+	go func() { rf.snapshotCh <- snapshotCmd{index, snapshot} }()
+}
+
+// check if should suspend snapshot taken at index
+// leader: suspend if any follower maybe lag (in a small amount, but not too far away, bound by leaderKeepLogAmount)
+// otherwise: no suspend
+func (rf *Raft) shouldSuspendSnapshot(index int) (r bool) {
+	r = false
+	if rf.state == Leader {
+		for i := range rf.peers {
+			if distance := index - rf.nextIndex[i]; distance >= 0 && distance <= leaderKeepLogAmount {
+				// if any follower lagging, leader keeps a small amount of trailing log for a while
+				r = true
+				break
+			}
+		}
+	}
+	return
+}
+
+// The snapshoter go routine run as background-goroutine to process snapshot command
+func (rf *Raft) snapshoter(trigger <-chan bool, dataCh <-chan snapshotCmd, quit <-chan bool) {
+	// keep JUST one snapshot command
+	var index int
+	var snapshot []byte
+	// may set to nil to block receiving from dataCh, to prevent current snapshot from being overwritten
+	cmdCh := dataCh
+
+LongRun:
+	// long-run singleton go routine, should check if killed
+	for !rf.killed() {
+		select {
+		case <-quit:
+			break LongRun // terminate long-run goroutine
+		case cmd := <-cmdCh:
+			index, snapshot = cmd.index, cmd.snapshot
+		case <-trigger:
+			if cmdCh == nil {
+				// receiving from dataCh is blocked =>
+				// there is a delayed snapshot waiting to be processed and persisted,
+				// re-check if can process this delayed snapshot
+				rf.mu.Lock()
+				if rf.shouldSuspendSnapshot(index) {
+					// no => wait for new trigger signal
+					rf.mu.Unlock()
+					continue
+				}
+				rf.mu.Unlock()
+				// yes => restore dataCh, ready to receive new snapshot command
+				cmdCh = dataCh
+			}
+		}
+
+		rf.mu.Lock()
+		if index <= rf.LastIncludedIndex {
+			// this snapshot has been covered by LastIncludedIndex =>
+			// this snapshot is out-of-date =>
+			// ignore
+			rf.mu.Unlock()
+			continue
+		}
+
+		if rf.shouldSuspendSnapshot(index) {
+			// snapshot is up-to-date, but should suspend,
+			// so block receiving from dataCh, and wait for trigger signal
+			rf.mu.Unlock()
+			cmdCh = nil
+			continue
+		}
+
+		// snapshot is up-to-date, and can process
+
+		// record term at index as LastIncludedTerm to persist
+		rf.LastIncludedTerm = rf.Log[index-rf.LastIncludedIndex-1].Term
+		// discard old log entries up through to index
+		rf.Log = rf.Log[index-rf.LastIncludedIndex:]
+		// record index as LastIncludedIndex to persist
+		rf.LastIncludedIndex = index
+
+		if data := rf.raftState(); data == nil {
+			Debug(rf, dError, "Write snapshot failed")
+			rf.mu.Unlock()
+			continue
+		} else {
+			lastLogIndex, lastLogTerm := rf.lastLogIndexAndTerm()
+			Debug(rf, dSnap, "Saved state: T:%d VF:%d, (LII:%d LIT:%d), (LLI:%d LLT:%d) and snapshot up through index: %d", rf.CurrentTerm, rf.VotedFor, rf.LastIncludedIndex, rf.LastIncludedTerm, lastLogIndex, lastLogTerm, index)
+			rf.persister.SaveStateAndSnapshot(data, snapshot)
+		}
+
+		rf.mu.Unlock()
+	}
 }

@@ -1,0 +1,38 @@
+Run as `./dstest -p50 -n16 -l -g2 -m256 -ff -v -ts TestSnapshotBasic2D`
+
+Running with 50 workers / 8 CPU cores available
+Running on CPU model: Intel(R) Core(TM) i5-8259U CPU @ 2.30GHz
+Running with verbosity level: 1
+
+Initial iterations: 16
+┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
+┃ Test                ┃ Failed ┃ Total ┃        Time ┃
+┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
+│ TestSnapshotBasic2D │      0 │    16 │ 3.58 ± 0.35 │
+└─────────────────────┴────────┴───────┴─────────────┘
+Increasing iterations to 32
+┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
+┃ Test                ┃ Failed ┃ Total ┃        Time ┃
+┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
+│ TestSnapshotBasic2D │      0 │    32 │ 4.28 ± 0.34 │
+└─────────────────────┴────────┴───────┴─────────────┘
+Increasing iterations to 64
+┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
+┃ Test                ┃ Failed ┃ Total ┃        Time ┃
+┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
+│ TestSnapshotBasic2D │      0 │    64 │ 4.48 ± 0.70 │
+└─────────────────────┴────────┴───────┴─────────────┘
+Increasing iterations to 128
+┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
+┃ Test                ┃ Failed ┃ Total ┃        Time ┃
+┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
+│ TestSnapshotBasic2D │      0 │   128 │ 4.53 ± 0.78 │
+└─────────────────────┴────────┴───────┴─────────────┘
+Increasing iterations to 256
+┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
+┃ Test                ┃ Failed ┃ Total ┃        Time ┃
+┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
+│ TestSnapshotBasic2D │      0 │   256 │ 4.58 ± 0.81 │
+└─────────────────────┴────────┴───────┴─────────────┘
+
+Completed 496 iterations in total

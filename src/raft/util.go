@@ -12,12 +12,17 @@ import (
 const (
 	// special NULL value for voteFor
 	voteForNull = -1
+	// number of long-run goroutines that need quit signal
+	nLongRunGoroutine = 2
 	// election timeout range, in millisecond
 	electionTimeoutMax = 1600
 	electionTimeoutMin = 800
 	// heartbeat interval, in millisecond (10 heartbeat RPCs per second)
 	// heartbeat interval should be one order less than election timeout
 	heartbeatInterval = 100
+	// leader will keep a small amount of trailing logs not compacted when snapshot
+	// to deal with slightly lagging follower
+	leaderKeepLogAmount = 20
 )
 
 type serverState string
