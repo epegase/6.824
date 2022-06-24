@@ -56,6 +56,7 @@ def main(
     n_columns: Optional[int] = typer.Option(None, "--columns", "-c"),
     ignore: Optional[str] = typer.Option(None, "--ignore", "-i", callback=list_topics),
     just: Optional[str] = typer.Option(None, "--just", "-j", callback=list_topics),
+    show_time: bool = typer.Option(False, "--time"),
 ):
     topics = list(TOPICS)
 
@@ -110,7 +111,8 @@ def main(
         # Colorize output by using rich syntax when needed
         if colorize and topic in TOPICS:
             color = TOPICS[topic]
-            msg = f"[{color}]{msg}[/{color}]"
+            timeStr = f"({(int(time)%1e4)/10}ms)" if show_time and not time.startswith('*') else ''
+            msg = f"[{color}]{timeStr}{msg}[/{color}]"
 
         # Single column printing. Always the case for debug stmts in tests
         if n_columns is None or topic in NO_COLUMN_TOPICS:

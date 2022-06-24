@@ -9,55 +9,6 @@ import (
 	"time"
 )
 
-const (
-	// special NULL value for voteFor
-	voteForNull = -1
-	// number of long-run goroutines that need quit signal
-	nLongRunGoroutine = 2
-	// election timeout range, in millisecond
-	electionTimeoutMax = 1600
-	electionTimeoutMin = 800
-	// heartbeat interval, in millisecond (10 heartbeat RPCs per second)
-	// heartbeat interval should be one order less than election timeout
-	heartbeatInterval = 100
-	// leader will keep a small amount of trailing logs not compacted when snapshot
-	// to deal with slightly lagging follower
-	leaderKeepLogAmount = 20
-)
-
-type serverState string
-
-const (
-	Leader    serverState = "L"
-	Candidate serverState = "C"
-	Follower  serverState = "F"
-)
-
-// set normal election timeout, with randomness
-func nextElectionAlarm() time.Time {
-	return time.Now().Add(time.Duration(randRange(electionTimeoutMin, electionTimeoutMax)) * time.Millisecond)
-}
-
-// set fast election timeout on startup, with randomness
-func initElectionAlarm() time.Time {
-	return time.Now().Add(time.Duration(randRange(0, electionTimeoutMax-electionTimeoutMin)) * time.Millisecond)
-}
-
-// actual intention name of AppendEntries RPC call
-func intentOfAppendEntriesRPC(args *AppendEntriesArgs) string {
-	if len(args.Entries) == 0 {
-		return "HB"
-	}
-	return "AE"
-}
-
-func dTopicOfAppendEntriesRPC(args *AppendEntriesArgs, defaultTopic logTopic) logTopic {
-	if len(args.Entries) == 0 {
-		return dHeart
-	}
-	return defaultTopic
-}
-
 func min(a, b int) int {
 	if a < b {
 		return a

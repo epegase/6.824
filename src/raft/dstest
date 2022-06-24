@@ -64,6 +64,7 @@ ALL_TEST_CASES = [
     'TestSnapshotInstall2D',
     'TestSnapshotInstallUnreliable2D',
     'TestSnapshotInstallCrash2D',
+    'TestSnapshotInstallUnCrash2D',
     'TestSnapshotAllCrash2D',
 ]
 

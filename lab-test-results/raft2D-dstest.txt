@@ -1,38 +1,63 @@
-Run as `./dstest -p50 -n16 -l -g2 -m256 -ff -v -ts TestSnapshotBasic2D`
+Run as `./dstest -p50 -n16 -l -g2 -m256 -ff -v -pa 2D`
 
 Running with 50 workers / 8 CPU cores available
 Running on CPU model: Intel(R) Core(TM) i5-8259U CPU @ 2.30GHz
 Running with verbosity level: 1
 
 Initial iterations: 16
-┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
-┃ Test                ┃ Failed ┃ Total ┃        Time ┃
-┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
-│ TestSnapshotBasic2D │      0 │    16 │ 3.58 ± 0.35 │
-└─────────────────────┴────────┴───────┴─────────────┘
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ Test                            ┃ Failed ┃ Total ┃         Time ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
+│ TestSnapshotBasic2D             │      0 │    16 │  4.08 ± 1.06 │
+│ TestSnapshotInstall2D           │      0 │    16 │ 44.63 ± 2.03 │
+│ TestSnapshotInstallUnreliable2D │      0 │    16 │ 47.04 ± 1.83 │
+│ TestSnapshotInstallCrash2D      │      0 │    16 │ 34.95 ± 1.34 │
+│ TestSnapshotInstallUnCrash2D    │      0 │    16 │ 37.89 ± 2.43 │
+│ TestSnapshotAllCrash2D          │      0 │    16 │  8.51 ± 1.38 │
+└─────────────────────────────────┴────────┴───────┴──────────────┘
 Increasing iterations to 32
-┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
-┃ Test                ┃ Failed ┃ Total ┃        Time ┃
-┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
-│ TestSnapshotBasic2D │      0 │    32 │ 4.28 ± 0.34 │
-└─────────────────────┴────────┴───────┴─────────────┘
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ Test                            ┃ Failed ┃ Total ┃         Time ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
+│ TestSnapshotBasic2D             │      0 │    32 │  3.48 ± 0.96 │
+│ TestSnapshotInstall2D           │      0 │    32 │ 43.56 ± 1.54 │
+│ TestSnapshotInstallUnreliable2D │      0 │    32 │ 48.09 ± 2.18 │
+│ TestSnapshotInstallCrash2D      │      0 │    32 │ 34.44 ± 1.52 │
+│ TestSnapshotInstallUnCrash2D    │      0 │    32 │ 38.59 ± 2.80 │
+│ TestSnapshotAllCrash2D          │      0 │    32 │  7.76 ± 1.02 │
+└─────────────────────────────────┴────────┴───────┴──────────────┘
 Increasing iterations to 64
-┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
-┃ Test                ┃ Failed ┃ Total ┃        Time ┃
-┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
-│ TestSnapshotBasic2D │      0 │    64 │ 4.48 ± 0.70 │
-└─────────────────────┴────────┴───────┴─────────────┘
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ Test                            ┃ Failed ┃ Total ┃         Time ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
+│ TestSnapshotBasic2D             │      0 │    64 │  3.25 ± 0.74 │
+│ TestSnapshotInstall2D           │      0 │    64 │ 43.71 ± 1.33 │
+│ TestSnapshotInstallUnreliable2D │      0 │    64 │ 46.86 ± 2.65 │
+│ TestSnapshotInstallCrash2D      │      0 │    64 │ 33.82 ± 0.96 │
+│ TestSnapshotInstallUnCrash2D    │      0 │    64 │ 38.11 ± 2.41 │
+│ TestSnapshotAllCrash2D          │      0 │    64 │  7.72 ± 1.12 │
+└─────────────────────────────────┴────────┴───────┴──────────────┘
 Increasing iterations to 128
-┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
-┃ Test                ┃ Failed ┃ Total ┃        Time ┃
-┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
-│ TestSnapshotBasic2D │      0 │   128 │ 4.53 ± 0.78 │
-└─────────────────────┴────────┴───────┴─────────────┘
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ Test                            ┃ Failed ┃ Total ┃         Time ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
+│ TestSnapshotBasic2D             │      0 │   128 │  3.10 ± 0.60 │
+│ TestSnapshotInstall2D           │      0 │   128 │ 43.83 ± 1.52 │
+│ TestSnapshotInstallUnreliable2D │      0 │   128 │ 47.00 ± 2.29 │
+│ TestSnapshotInstallCrash2D      │      0 │   128 │ 33.90 ± 0.96 │
+│ TestSnapshotInstallUnCrash2D    │      0 │   128 │ 37.68 ± 2.28 │
+│ TestSnapshotAllCrash2D          │      0 │   128 │  7.62 ± 0.90 │
+└─────────────────────────────────┴────────┴───────┴──────────────┘
 Increasing iterations to 256
-┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
-┃ Test                ┃ Failed ┃ Total ┃        Time ┃
-┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
-│ TestSnapshotBasic2D │      0 │   256 │ 4.58 ± 0.81 │
-└─────────────────────┴────────┴───────┴─────────────┘
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ Test                            ┃ Failed ┃ Total ┃         Time ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
+│ TestSnapshotBasic2D             │      0 │   256 │  2.98 ± 0.45 │
+│ TestSnapshotInstall2D           │      0 │   256 │ 43.36 ± 1.49 │
+│ TestSnapshotInstallUnreliable2D │      0 │   256 │ 46.85 ± 2.45 │
+│ TestSnapshotInstallCrash2D      │      0 │   256 │ 33.73 ± 0.92 │
+│ TestSnapshotInstallUnCrash2D    │      0 │   256 │ 37.60 ± 2.30 │
+│ TestSnapshotAllCrash2D          │      0 │   256 │  7.48 ± 0.92 │
+└─────────────────────────────────┴────────┴───────┴──────────────┘
 
 Completed 496 iterations in total
