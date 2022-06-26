@@ -6,6 +6,29 @@ schedule html md5:
 > curl https://pdos.csail.mit.edu/6.824/schedule.html | md5sum
 b6143938e1a4a0eb1f27f121acdde63c
 ```
+### Test results for all 6.824 labs
+
+- Lab1: MapReduce
+
+  ✅ [result](./lab-test-results/mapreduce.txt)
+
+- Lab2: Raft
+
+  ✅ [all test cases, one iteration](./lab-test-results/raft.txt)  
+  ✅ [all test cases, thousands iterations](./lab-test-results/raft-dstest.txt)  
+  ✅ [all test cases, with race detector, hundreds iterations](./lab-test-results/raft-dstest-with-race-detector.txt)  
+  ✅ [2A test cases, one iteration](./lab-test-results/raft2A.txt)  
+  ✅ [2A test cases, hundreds iterations](./lab-test-results/raft2A-dstest.txt)  
+  ✅ [2B test cases, one iteration](./lab-test-results/raft2B.txt)  
+  ✅ [2B test cases, hundreds iterations](./lab-test-results/raft2B-dstest.txt)  
+  ✅ [2C test cases, one iteration](./lab-test-results/raft2C.txt)  
+  ✅ [2C test cases, hundreds iterations](./lab-test-results/raft2C-dstest.txt)  
+  ✅ [2D test cases, one iteration](./lab-test-results/raft2D.txt)  
+  ✅ [2D test cases, hundreds iterations](./lab-test-results/raft2D-dstest.txt)  
+
+- Lab3: KV Raft
+
+- Lab4: Sharded KV
 
 ### Progress
 
@@ -18,7 +41,7 @@ b6143938e1a4a0eb1f27f121acdde63c
 
 - [x] LEC 3: [GFS](https://pdos.csail.mit.edu/6.824/notes/l-gfs.txt), [video](https://youtu.be/6ETFk1-53qU) 
   - [x] Preparation: Read [GFS (2003)](https://pdos.csail.mit.edu/6.824/papers/gfs.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/gfs-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-gfs&lec=3)) 
-  - [ ] Assigned: [Lab 2: Raft](https://pdos.csail.mit.edu/6.824/labs/lab-raft.html)
+  - [x] Assigned: [Lab 2: Raft](https://pdos.csail.mit.edu/6.824/labs/lab-raft.html)
 
 - [x] LEC 4: [Primary-Backup Replication](https://pdos.csail.mit.edu/6.824/notes/l-vm-ft.txt), [video](https://youtu.be/gXiDmq1zDq4) 
   - [x] Preparation: Read [Fault-Tolerant Virtual Machines (2010)](https://pdos.csail.mit.edu/6.824/papers/vm-ft.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/vm-ft-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-vm-ft&lec=4))

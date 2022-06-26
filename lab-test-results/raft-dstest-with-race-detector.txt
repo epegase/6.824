@@ -1,34 +1,45 @@
-Run as `./dstest -p8 -n128 -ff -v -r -pa 2A,2B,2C`
+With some modification:
+- relax config.go checkTimeout from 2 minutes to 10 minutes, to avoid timeout when running with race detection
+- run with go version go1.19beta1, to avoid 'limit on 8128 simultaneously alive goroutines is exceeded, dying' problem on prior go version
+
+--------------------------------------------------------------------------------
+
+Run as `./dstest -p24 -n128 -r -pa 2A,2B,2C,2D`
 
 Running with the race detector
-Running with 8 workers / 8 CPU cores available
+Running with 24 workers / 8 CPU cores available
 Running on CPU model: Intel(R) Core(TM) i5-8259U CPU @ 2.30GHz
-Running with verbosity level: 1
 
-┏━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
-┃ Test                    ┃ Failed ┃ Total ┃         Time ┃
-┡━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
-│ TestInitialElection2A   │      0 │   128 │  3.57 ± 0.21 │
-│ TestReElection2A        │      0 │   128 │  6.14 ± 0.48 │
-│ TestManyElections2A     │      0 │   128 │  7.99 ± 0.95 │
-│ TestBasicAgree2B        │      0 │   128 │  0.97 ± 0.23 │
-│ TestRPCBytes2B          │      0 │   128 │  1.81 ± 0.24 │
-│ TestFollowerFailure2B   │      0 │   128 │  4.93 ± 0.24 │
-│ TestLeaderFailure2B     │      0 │   128 │  6.00 ± 0.28 │
-│ TestFailAgree2B         │      0 │   128 │  5.16 ± 0.87 │
-│ TestFailNoAgree2B       │      0 │   128 │  3.85 ± 0.30 │
-│ TestConcurrentStarts2B  │      0 │   128 │  0.94 ± 0.19 │
-│ TestRejoin2B            │      0 │   128 │  5.83 ± 1.07 │
-│ TestBackup2B            │      0 │   128 │ 16.60 ± 1.02 │
-│ TestCount2B             │      0 │   128 │  2.42 ± 0.13 │
-│ TestPersist12C          │      0 │   128 │  4.48 ± 0.48 │
-│ TestPersist22C          │      0 │   128 │ 19.03 ± 1.27 │
-│ TestPersist32C          │      0 │   128 │  1.80 ± 0.27 │
-│ TestFigure82C           │      0 │   128 │ 31.44 ± 2.72 │
-│ TestUnreliableAgree2C   │      0 │   128 │  2.13 ± 0.43 │
-│ TestFigure8Unreliable2C │      0 │   128 │ 44.94 ± 5.29 │
-│ TestReliableChurn2C     │      0 │   128 │ 16.78 ± 0.36 │
-│ TestUnreliableChurn2C   │      0 │   128 │ 16.75 ± 0.32 │
-└─────────────────────────┴────────┴───────┴──────────────┘
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ Test                            ┃ Failed ┃ Total ┃         Time ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
+│ TestInitialElection2A           │      0 │   128 │  4.02 ± 0.37 │
+│ TestReElection2A                │      0 │   128 │  6.45 ± 0.50 │
+│ TestManyElections2A             │      0 │   128 │  7.78 ± 0.78 │
+│ TestBasicAgree2B                │      0 │   128 │  1.15 ± 0.35 │
+│ TestRPCBytes2B                  │      0 │   128 │  1.95 ± 0.35 │
+│ TestFollowerFailure2B           │      0 │   128 │  5.09 ± 0.33 │
+│ TestLeaderFailure2B             │      0 │   128 │  6.03 ± 0.36 │
+│ TestFailAgree2B                 │      0 │   128 │  5.83 ± 0.49 │
+│ TestFailNoAgree2B               │      0 │   128 │  4.41 ± 0.42 │
+│ TestConcurrentStarts2B          │      0 │   128 │  1.32 ± 0.37 │
+│ TestRejoin2B                    │      0 │   128 │  6.04 ± 1.13 │
+│ TestBackup2B                    │      0 │   128 │ 16.70 ± 1.07 │
+│ TestCount2B                     │      0 │   128 │  2.86 ± 0.36 │
+│ TestPersist12C                  │      0 │   128 │  4.38 ± 0.46 │
+│ TestPersist22C                  │      0 │   128 │ 17.05 ± 1.06 │
+│ TestPersist32C                  │      0 │   128 │  1.97 ± 0.39 │
+│ TestFigure82C                   │      0 │   128 │ 32.09 ± 2.60 │
+│ TestUnreliableAgree2C           │      0 │   128 │  2.68 ± 0.66 │
+│ TestFigure8Unreliable2C         │      0 │   128 │ 44.62 ± 9.61 │
+│ TestReliableChurn2C             │      0 │   128 │ 17.30 ± 0.38 │
+│ TestUnreliableChurn2C           │      0 │   128 │ 17.31 ± 0.42 │
+│ TestSnapshotBasic2D             │      0 │   128 │  4.08 ± 0.48 │
+│ TestSnapshotInstall2D           │      0 │   128 │ 43.20 ± 1.53 │
+│ TestSnapshotInstallUnreliable2D │      0 │   128 │ 46.77 ± 2.05 │
+│ TestSnapshotInstallCrash2D      │      0 │   128 │ 33.47 ± 0.76 │
+│ TestSnapshotInstallUnCrash2D    │      0 │   128 │ 38.16 ± 2.82 │
+│ TestSnapshotAllCrash2D          │      0 │   128 │  7.64 ± 0.79 │
+└─────────────────────────────────┴────────┴───────┴──────────────┘
 
 Completed 128 iterations in total

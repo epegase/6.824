@@ -34,7 +34,7 @@ const (
 	// number of long-run goroutines that need quit signal
 	nLongRunGoroutine = 2
 	// election timeout range, in millisecond
-	electionTimeoutMax = 1600
+	electionTimeoutMax = 1200
 	electionTimeoutMin = 800
 	// heartbeat interval, in millisecond (10 heartbeat RPCs per second)
 	// heartbeat interval should be one order less than election timeout
@@ -133,12 +133,10 @@ type Raft struct {
 
 	// if send true, tell committer to advance commit and apply msg to client
 	// if send false, tell committer to send received snapshot back to service
-	commitTrigger chan bool
-
+	commitTrigger   chan bool
 	snapshotCh      chan snapshotCmd // tell snapshoter to take a snapshot
 	snapshotTrigger chan bool        // tell snapshoter to save delayed snapshot
-
-	quit chan bool // tell long-run goroutines to exit
+	quit            chan bool        // tell long-run goroutines to exit
 
 	// Your data here (2A, 2B, 2C).
 	// Look at the paper's Figure 2 for a description of what
@@ -259,12 +257,10 @@ func (rf *Raft) Kill() {
 	// Your code here, if desired.
 
 	// to terminate all long-run goroutines
-	go func() {
-		// quit committer, snapshoter
-		for i := 0; i < nLongRunGoroutine; i++ {
-			rf.quit <- true
-		}
-	}()
+	// quit committer, snapshoter
+	for i := 0; i < nLongRunGoroutine; i++ {
+		rf.quit <- true
+	}
 }
 
 func (rf *Raft) killed() bool {
@@ -283,7 +279,11 @@ func (rf *Raft) stepDown(term int) {
 	rf.persist()
 
 	// once step down, trigger any delayed snapshot
-	go func() { rf.snapshotTrigger <- true }()
+	go func() {
+		if !rf.killed() {
+			rf.snapshotTrigger <- true
+		}
+	}()
 }
 
 // index and term of last log entry, with mutex held
@@ -358,7 +358,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	reply.Term = rf.CurrentTerm
 	reply.VoteGranted = false
 
-	if args.Term < rf.CurrentTerm || args.CandidateId == rf.me {
+	if args.Term < rf.CurrentTerm || args.CandidateId == rf.me || rf.killed() {
 		// Respond to RPCs from candidates and leaders
 		// Reply false if term < CurrentTerm
 		// Followers only respond to requests from other servers
@@ -380,6 +380,12 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		Debug(rf, dVote, "Granting Vote to C%d at T%d", args.CandidateId, args.Term)
 		reply.VoteGranted = true
 		rf.VotedFor = args.CandidateId
+
+		// IMPORTANT:
+		// Adopt advice from #Livelocks part of [students-guide-to-raft](https://thesquareplanet.com/blog/students-guide-to-raft/#livelocks)
+		// Quote:
+		//   restart your election timer if a)...; b)...; c) you grant a vote to another peer
+		rf.electionAlarm = nextElectionAlarm()
 
 		rf.persist()
 	}
@@ -434,37 +440,56 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *Reques
 }
 
 // The requestVote go routine sends RequestVote RPC to one peer and deal with reply
-func (rf *Raft) requestVote(server int, args *RequestVoteArgs, grant chan<- bool) {
-	reply := &RequestVoteReply{}
-	r := rf.sendRequestVote(server, args, reply)
-
+func (rf *Raft) requestVote(server int, term int, args *RequestVoteArgs, grant chan<- bool) {
 	granted := false
 	defer func() { grant <- granted }()
 
-	if rf.killed() {
+	rf.mu.Lock()
+	if rf.state != Candidate || rf.CurrentTerm != term || rf.killed() {
+		rf.mu.Unlock()
+		return
+	}
+	rf.mu.Unlock()
+
+	reply := &RequestVoteReply{}
+	r := rf.sendRequestVote(server, args, reply)
+
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+
+	// re-check all relevant assumptions
+	// - still a candidate
+	// - instance not killed
+	if rf.state != Candidate || rf.killed() {
 		return
 	}
 
 	if !r {
-		Debug(rf, dDrop, "RV been dropped: %v", *args)
+		Debug(rf, dDrop, "RV been dropped: {T:%d LLI:%d LLT:%d}", args.Term, args.LastLogIndex, args.LastLogTerm)
 		return
 	}
 
-	rf.mu.Lock()
-	defer rf.mu.Unlock()
-	// re-check all relevant assumptions
-	// - still a candidate
-	// - rf.CurrentTerm hasn't changed since the decision to become a candidate
-	if rf.state == Candidate && args.Term == rf.CurrentTerm {
-		if reply.Term > rf.CurrentTerm {
-			// If RPC response contains term T > CurrentTerm: set CurrentTerm = T, convert to follower
-			Debug(rf, dTerm, "RV <- S%d Term is higher(%d > %d), following", server, reply.Term, rf.CurrentTerm)
-			rf.stepDown(reply.Term)
-		} else {
-			granted = reply.VoteGranted
-		}
-		Debug(rf, dVote, "<- S%d Got Vote: %t, at T%d", server, granted, args.Term)
+	if reply.Term > rf.CurrentTerm {
+		// If RPC response contains term T > CurrentTerm: set CurrentTerm = T, convert to follower
+		Debug(rf, dTerm, "RV <- S%d Term is higher(%d > %d), following", server, reply.Term, rf.CurrentTerm)
+		rf.stepDown(reply.Term)
+		return
 	}
+
+	// IMPORTANT:
+	// Adopt advice from #Term-confusion part of [students-guide-to-raft](https://thesquareplanet.com/blog/students-guide-to-raft/#term-confusion)
+	// Quote:
+	//  From experience, we have found that by far the simplest thing to do is to
+	//  first record the term in the reply (it may be higher than your current term),
+	//  and then to compare the current term with the term you sent in your original RPC.
+	//  If the two are different, drop the reply and return.
+	//  Only if the two terms are the same should you continue processing the reply.
+	if rf.CurrentTerm != term {
+		return
+	}
+
+	granted = reply.VoteGranted
+	Debug(rf, dVote, "<- S%d Got Vote: %t, at T%d", server, granted, term)
 }
 
 // The collectVote go routine collects votes from peers
@@ -482,7 +507,8 @@ func (rf *Raft) collectVote(term int, grant <-chan bool) {
 			// re-check all relevant assumptions
 			// - still a candidate
 			// - rf.CurrentTerm hasn't changed since the decision to become a candidate
-			if rf.state != Candidate || rf.CurrentTerm != term {
+			// - install not killed
+			if rf.state != Candidate || rf.CurrentTerm != term || rf.killed() {
 				rf.mu.Unlock()
 			} else {
 				rf.winElection()
@@ -523,7 +549,8 @@ func (rf *Raft) ticker() {
 				// On conversion to candidate, start election:
 				// - Increment CurrentTerm
 				rf.CurrentTerm++
-				Debug(rf, dTerm, "Converting to Candidate, calling election T:%d", rf.CurrentTerm)
+				term := rf.CurrentTerm
+				Debug(rf, dTerm, "Converting to Candidate, calling election T:%d", term)
 				// - Change to Candidate
 				rf.state = Candidate
 				// - Vote for self
@@ -543,7 +570,7 @@ func (rf *Raft) ticker() {
 				// - Send RequestVote RPCs to all other servers
 				for i := range rf.peers {
 					if i != rf.me {
-						go rf.requestVote(i, args, grant)
+						go rf.requestVote(i, term, args, grant)
 					}
 				}
 
@@ -573,6 +600,7 @@ type AppendEntriesReply struct {
 	Success bool // true if follower contained entry matching prevLogIndex and prevLogTerm
 
 	// OPTIMIZATION
+
 	XTerm  int // term in the conflicting entry (if any)
 	XIndex int // index of first entry with that XTerm term (if any)
 	XLen   int // log length
@@ -587,7 +615,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	reply.Term = rf.CurrentTerm
 	reply.Success = false
 
-	if args.Term < rf.CurrentTerm || args.LeaderId == rf.me {
+	if args.Term < rf.CurrentTerm || args.LeaderId == rf.me || rf.killed() {
 		// Respond to RPCs from candidates and leaders
 		// Followers only respond to requests from other servers
 		// Reply false if term < CurrentTerm
@@ -608,7 +636,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		rf.stepDown(args.Term)
 	}
 
-	Debug(rf, dTimer, "Resetting ELT, received %s at T%d", intentOfAppendEntriesRPC(args), args.Term)
+	Debug(rf, dTimer, "Resetting ELT, received %s from L%d at T%d", intentOfAppendEntriesRPC(args), args.LeaderId, args.Term)
 	rf.electionAlarm = nextElectionAlarm()
 
 	// Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm
@@ -698,7 +726,11 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		lastLogIndex, _ := rf.lastLogIndexAndTerm()
 		rf.commitIndex = min(args.LeaderCommit, lastLogIndex)
 		// going to commit
-		go func() { rf.commitTrigger <- true }()
+		go func() {
+			if !rf.killed() {
+				rf.commitTrigger <- true
+			}
+		}()
 	}
 }
 
@@ -753,14 +785,20 @@ func (rf *Raft) appendEntries(server int, term int) {
 	reply := &AppendEntriesReply{}
 	r := rf.sendAppendEntries(server, args, reply)
 
-	if rf.killed() {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+
+	// re-check all relevant assumptions
+	// - still a leader
+	// - instance not killed
+	if rf.state != Leader || rf.killed() {
 		return
 	}
 
 	rpcIntent := intentOfAppendEntriesRPC(args)
 
 	if !r {
-		Debug(rf, dDrop, "%s been dropped: %v", rpcIntent, *args)
+		Debug(rf, dDrop, "%s been dropped: {T:%d PLI:%d PLT:%d LC:%d log length:%d}", rpcIntent, args.Term, args.PrevLogIndex, args.PrevLogTerm, args.LeaderCommit, len(args.Entries))
 		// retry when no reply from the server
 		go rf.appendEntries(server, term)
 		return
@@ -768,23 +806,29 @@ func (rf *Raft) appendEntries(server int, term int) {
 
 	Debug(rf, dTopicOfAppendEntriesRPC(args, dLog), "%s <- S%d Reply: %+v", rpcIntent, server, *reply)
 
-	rf.mu.Lock()
-	defer rf.mu.Unlock()
-
 	if reply.Term > rf.CurrentTerm {
 		// If RPC response contains term T > CurrentTerm: set CurrentTerm = T, convert to follower
 		Debug(rf, dTerm, "%s <- S%d Term is higher(%d > %d), following", rpcIntent, server, reply.Term, rf.CurrentTerm)
 		rf.stepDown(reply.Term)
 		rf.electionAlarm = nextElectionAlarm()
+		return
 	}
 
-	if rf.state != Leader {
+	// IMPORTANT:
+	// Adopt advice from #Term-confusion part of [students-guide-to-raft](https://thesquareplanet.com/blog/students-guide-to-raft/#term-confusion)
+	// Quote:
+	//  From experience, we have found that by far the simplest thing to do is to
+	//  first record the term in the reply (it may be higher than your current term),
+	//  and then to compare the current term with the term you sent in your original RPC.
+	//  If the two are different, drop the reply and return.
+	//  Only if the two terms are the same should you continue processing the reply.
+	if rf.CurrentTerm != term {
 		return
 	}
 
 	if reply.Success {
 		// If successful: update nextIndex and matchIndex for follower
-
+		// if success, nextIndex should ONLY increase
 		oldNextIndex := rf.nextIndex[server]
 		// if network reorders RPC replies, and to-update nextIndex < current nextIndex for a peer,
 		// DON'T update nextIndex to smaller value (to avoid re-send log entries that follower already has)
@@ -798,7 +842,11 @@ func (rf *Raft) appendEntries(server int, term int) {
 
 		if rf.nextIndex[server] > oldNextIndex {
 			// nextIndex updated, tell snapshoter to check if any delayed snapshot command can be processed
-			go func() { rf.snapshotTrigger <- true }()
+			go func() {
+				if !rf.killed() {
+					rf.snapshotTrigger <- true
+				}
+			}()
 		}
 
 		return
@@ -865,7 +913,7 @@ func (rf *Raft) appendEntries(server int, term int) {
 func (rf *Raft) Start(command interface{}) (index int, term int, isLeader bool) {
 	// Your code here (2B).
 	rf.mu.Lock()
-	if rf.state != Leader {
+	if rf.state != Leader || rf.killed() {
 		rf.mu.Unlock()
 		return
 	}
@@ -933,7 +981,7 @@ func (rf *Raft) checkCommit(term int) {
 	defer rf.mu.Unlock()
 
 	// re-check state and term
-	if rf.state != Leader || rf.CurrentTerm != term {
+	if rf.state != Leader || rf.CurrentTerm != term || rf.killed() {
 		return
 	}
 
@@ -966,7 +1014,11 @@ func (rf *Raft) checkCommit(term int) {
 
 	if oldCommitIndex != rf.commitIndex {
 		// going to commit
-		go func() { rf.commitTrigger <- true }()
+		go func() {
+			if !rf.killed() {
+				rf.commitTrigger <- true
+			}
+		}()
 	}
 }
 
@@ -1035,6 +1087,9 @@ LongRun:
 
 		rf.mu.Unlock()
 	}
+
+	// IMPORTANT: close channel to avoid resource leak
+	close(applyCh)
 }
 
 /************************* Persist (2C) ***************************************/
@@ -1116,7 +1171,11 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	// Your code here (2D).
 	// no need to process immediately
 	// send to queue for background-goroutine snapshoter to process
-	go func() { rf.snapshotCh <- snapshotCmd{index, snapshot} }()
+	go func() {
+		if !rf.killed() {
+			rf.snapshotCh <- snapshotCmd{index, snapshot}
+		}
+	}()
 }
 
 // check if should suspend snapshot taken at index
@@ -1232,7 +1291,7 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 
 	reply.Term = rf.CurrentTerm
 
-	if args.Term < rf.CurrentTerm || args.LeaderId == rf.me {
+	if args.Term < rf.CurrentTerm || args.LeaderId == rf.me || rf.killed() {
 		// Respond to RPCs from candidates and leaders
 		// Followers only respond to requests from other servers
 		// Reply immediately if term < CurrentTerm
@@ -1245,7 +1304,7 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 		rf.stepDown(args.Term)
 	}
 
-	Debug(rf, dTimer, "Resetting ELT, received IS at T%d", args.Term)
+	Debug(rf, dTimer, "Resetting ELT, received IS from L%d at T%d", args.LeaderId, args.Term)
 	rf.electionAlarm = nextElectionAlarm()
 
 	if args.LastIncludedIndex <= rf.LastIncludedIndex {
@@ -1270,7 +1329,11 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 		rf.saveStateAndSnapshot(args.Data)
 
 		// going to send snapshot to service
-		go func() { rf.commitTrigger <- false }()
+		go func() {
+			if !rf.killed() {
+				rf.commitTrigger <- false
+			}
+		}()
 	}()
 
 	for i := range rf.Log {
@@ -1309,6 +1372,7 @@ func (rf *Raft) sendInstallSnapshot(server int, args *InstallSnapshotArgs, reply
 	return ok
 }
 
+// The installSnapshot go routine send InstallSnapshot RPC to one peer and deal with reply
 func (rf *Raft) installSnapshot(server int, term int) {
 	rf.mu.Lock()
 	if rf.state != Leader || rf.CurrentTerm != term || rf.killed() {
@@ -1321,31 +1385,44 @@ func (rf *Raft) installSnapshot(server int, term int) {
 	reply := &InstallSnapshotReply{}
 	r := rf.sendInstallSnapshot(server, args, reply)
 
-	if rf.killed() {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+
+	// re-check all relevant assumptions
+	// - still a leader
+	// - instance not killed
+	if rf.state != Leader || rf.killed() {
 		return
 	}
 
 	if !r {
-		Debug(rf, dDrop, "IS been dropped: %v", *args)
+		Debug(rf, dDrop, "IS been dropped: {T:%d LII:%d LIT:%d}", args.Term, args.LastIncludedIndex, args.LastIncludedTerm)
 		// retry when no reply from the server
 		go rf.installSnapshot(server, term)
 		return
 	}
-
-	rf.mu.Lock()
-	defer rf.mu.Unlock()
 
 	if reply.Term > rf.CurrentTerm {
 		// If RPC response contains term T > CurrentTerm: set CurrentTerm = T, convert to follower
 		Debug(rf, dTerm, "IS <- S%d Term is higher(%d > %d), following", server, reply.Term, rf.CurrentTerm)
 		rf.stepDown(reply.Term)
 		rf.electionAlarm = nextElectionAlarm()
-	}
-
-	if rf.state != Leader {
 		return
 	}
 
+	// IMPORTANT:
+	// Adopt advice from #Term-confusion part of [students-guide-to-raft](https://thesquareplanet.com/blog/students-guide-to-raft/#term-confusion)
+	// Quote:
+	//  From experience, we have found that by far the simplest thing to do is to
+	//  first record the term in the reply (it may be higher than your current term),
+	//  and then to compare the current term with the term you sent in your original RPC.
+	//  If the two are different, drop the reply and return.
+	//  Only if the two terms are the same should you continue processing the reply.
+	if rf.CurrentTerm != term {
+		return
+	}
+
+	// if success, nextIndex should ONLY increase
 	oldNextIndex := rf.nextIndex[server]
 	// if network reorders RPC replies, and to-update nextIndex < current nextIndex for a peer,
 	// DON'T update nextIndex to smaller value (to avoid re-send log entries that follower already has)
@@ -1356,6 +1433,10 @@ func (rf *Raft) installSnapshot(server int, term int) {
 
 	if rf.nextIndex[server] > oldNextIndex {
 		// nextIndex updated, tell snapshoter to check if any delayed snapshot command can be processed
-		go func() { rf.snapshotTrigger <- true }()
+		go func() {
+			if !rf.killed() {
+				rf.snapshotTrigger <- true
+			}
+		}()
 	}
 }

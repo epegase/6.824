@@ -11,3 +11,4 @@ mrtmp.*
 /main/mrsequential
 /main/mrworker
 **/*.log
+*.test
