@@ -59,7 +59,7 @@ b6143938e1a4a0eb1f27f121acdde63c
 - [x] LEC 8: Q&A Lab2 A+B 
   - [x] Preparation: ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-QAlab&lec=8))
 
-- [ ] LEC 9: [Zookeeper](https://pdos.csail.mit.edu/6.824/notes/l-zookeeper.txt), [video](https://youtu.be/HYTDDLo2vSE) 
+- [x] LEC 9: [Zookeeper](https://pdos.csail.mit.edu/6.824/notes/l-zookeeper.txt), [video](https://youtu.be/HYTDDLo2vSE) 
   - [x] Preparation: Read [ZooKeeper (2010)](https://pdos.csail.mit.edu/6.824/papers/zookeeper.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/zookeeper-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-zookeeper&lec=9)) 
   - [ ] Assigned: [Lab 3: KV Raft](https://pdos.csail.mit.edu/6.824/labs/lab-kvraft.html)
 
