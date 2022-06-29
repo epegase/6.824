@@ -63,7 +63,7 @@ b6143938e1a4a0eb1f27f121acdde63c
   - [x] Preparation: Read [ZooKeeper (2010)](https://pdos.csail.mit.edu/6.824/papers/zookeeper.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/zookeeper-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-zookeeper&lec=9)) 
   - [ ] Assigned: [Lab 3: KV Raft](https://pdos.csail.mit.edu/6.824/labs/lab-kvraft.html)
 
-- [ ] LEC 10: [Chain Replication](https://pdos.csail.mit.edu/6.824/notes/l-cr.txt), [video](https://youtu.be/1uUcW-Mqg5o) 
+- [x] LEC 10: [Chain Replication](https://pdos.csail.mit.edu/6.824/notes/l-cr.txt), [video](https://youtu.be/1uUcW-Mqg5o) 
   - [x] Preparation: Read [CR (2004)](https://pdos.csail.mit.edu/6.824/papers/cr-osdi04.pdf) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-cr&lec=10))
 
 - [ ] LEC 11: [Distributed Transactions](https://pdos.csail.mit.edu/6.824/notes/l-2pc.txt), [video](https://youtu.be/B6btpukqHpM) 
