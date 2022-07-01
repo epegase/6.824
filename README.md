@@ -66,7 +66,7 @@ b6143938e1a4a0eb1f27f121acdde63c
 - [x] LEC 10: [Chain Replication](https://pdos.csail.mit.edu/6.824/notes/l-cr.txt), [video](https://youtu.be/1uUcW-Mqg5o) 
   - [x] Preparation: Read [CR (2004)](https://pdos.csail.mit.edu/6.824/papers/cr-osdi04.pdf) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-cr&lec=10))
 
-- [ ] LEC 11: [Distributed Transactions](https://pdos.csail.mit.edu/6.824/notes/l-2pc.txt), [video](https://youtu.be/B6btpukqHpM) 
+- [x] LEC 11: [Distributed Transactions](https://pdos.csail.mit.edu/6.824/notes/l-2pc.txt), [video](https://youtu.be/B6btpukqHpM) 
   - [x] Preparation: Read [6.033 Chapter 9](https://ocw.mit.edu/resources/res-6-004-principles-of-computer-system-design-an-introduction-spring-2009/online-textbook/), just 9.1.5, 9.1.6, 9.5.2, 9.5.3, 9.6.3 ([FAQ](https://pdos.csail.mit.edu/6.824/papers/chapter9-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-chapter9&lec=11))
 
 - [ ] LEC 12: [Cache Consistency: Frangipani](https://pdos.csail.mit.edu/6.824/notes/l-frangipani.txt), [video](https://youtu.be/jPrUxfIcWWs) 
