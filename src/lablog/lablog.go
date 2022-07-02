@@ -44,6 +44,7 @@ const (
 	Warn    LogTopic = "WARN"
 	Config  LogTopic = "CONF"
 	Heart   LogTopic = "HART"
+	Server  LogTopic = "SRVR"
 )
 
 var debugStart time.Time

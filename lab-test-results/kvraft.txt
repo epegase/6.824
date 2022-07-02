@@ -1,0 +1,5 @@
+Test: one client (3A) ...
+  ... Passed --  15.1  5 29012 4817
+PASS
+ok  	6.824/kvraft	15.055s
+go test -run Basic3A  45.25s user 0.67s system 301% cpu 15.211 total

@@ -33,7 +33,8 @@ TOPICS = {
     "ERRO": "#fe2626",
     "TRCE": "#fe2626",
     "CONF": "#ffe411",
-    "HART": "#810672"
+    "HART": "#810672",
+    "SRVR": '#ff7dfa',
 }
 # fmt: on
 

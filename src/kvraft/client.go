@@ -1,9 +1,11 @@
 package kvraft
 
-import "6.824/labrpc"
-import "crypto/rand"
-import "math/big"
+import (
+	"crypto/rand"
+	"math/big"
 
+	"6.824/labrpc"
+)
 
 type Clerk struct {
 	servers []*labrpc.ClientEnd
@@ -37,9 +39,28 @@ func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 // arguments. and reply must be passed as a pointer.
 //
 func (ck *Clerk) Get(key string) string {
-
 	// You will have to modify this function.
-	return ""
+	args := &GetArgs{
+		Key: key,
+	}
+	for {
+		for i := range ck.servers {
+			reply := &GetReply{}
+			ok := ck.servers[i].Call("KVServer.Get", args, reply)
+			if !ok {
+				continue
+			}
+			if reply.Err == ErrWrongLeader {
+				continue
+			}
+			if reply.Err == ErrNoKey {
+				return ""
+			}
+			if reply.Err == OK {
+				return reply.Value
+			}
+		}
+	}
 }
 
 //
@@ -52,13 +73,36 @@ func (ck *Clerk) Get(key string) string {
 // must match the declared types of the RPC handler function's
 // arguments. and reply must be passed as a pointer.
 //
-func (ck *Clerk) PutAppend(key string, value string, op string) {
+func (ck *Clerk) PutAppend(key string, value string, op opType) {
 	// You will have to modify this function.
+	args := &PutAppendArgs{
+		Key:   key,
+		Value: value,
+		Op:    op,
+	}
+	for {
+		for i := range ck.servers {
+			reply := &PutAppendReply{}
+			ok := ck.servers[i].Call("KVServer.PutAppend", args, reply)
+			if !ok {
+				continue
+			}
+			if reply.Err == ErrWrongLeader {
+				continue
+			}
+			if reply.Err == ErrNoKey {
+				panic("PutAppend reply no key")
+			}
+			if reply.Err == OK {
+				return
+			}
+		}
+	}
 }
 
 func (ck *Clerk) Put(key string, value string) {
-	ck.PutAppend(key, value, "Put")
+	ck.PutAppend(key, value, opPut)
 }
 func (ck *Clerk) Append(key string, value string) {
-	ck.PutAppend(key, value, "Append")
+	ck.PutAppend(key, value, opAppend)
 }

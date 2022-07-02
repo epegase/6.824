@@ -1,20 +1,23 @@
 package kvraft
 
-import "6.824/labrpc"
-import "testing"
-import "os"
+import (
+	"os"
+	"testing"
 
-// import "log"
-import crand "crypto/rand"
-import "math/big"
-import "math/rand"
-import "encoding/base64"
-import "sync"
-import "runtime"
-import "6.824/raft"
-import "fmt"
-import "time"
-import "sync/atomic"
+	crand "crypto/rand"
+	"encoding/base64"
+	"fmt"
+	"math/big"
+	"math/rand"
+	"runtime"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"6.824/lablog"
+	"6.824/labrpc"
+	"6.824/raft"
+)
 
 func randstring(n int) string {
 	b := make([]byte, 2*n)
@@ -358,6 +361,7 @@ func (cfg *config) make_partition() ([]int, []int) {
 var ncpu_once sync.Once
 
 func make_config(t *testing.T, n int, unreliable bool, maxraftstate int) *config {
+	lablog.Debug(-1, lablog.Config, "%d servers", n)
 	ncpu_once.Do(func() {
 		if runtime.NumCPU() < 2 {
 			fmt.Printf("warning: only one CPU, which may conceal locking bugs\n")
