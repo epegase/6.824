@@ -27,6 +27,7 @@ import (
 	"6.824/labgob"
 	"6.824/lablog"
 	"6.824/labrpc"
+	"6.824/labutil"
 )
 
 const (
@@ -55,12 +56,12 @@ const (
 
 // set normal election timeout, with randomness
 func nextElectionAlarm() time.Time {
-	return time.Now().Add(time.Duration(randRange(electionTimeoutMin, electionTimeoutMax)) * time.Millisecond)
+	return time.Now().Add(time.Duration(labutil.RandRange(electionTimeoutMin, electionTimeoutMax)) * time.Millisecond)
 }
 
 // set fast election timeout on startup, with randomness
 func initElectionAlarm() time.Time {
-	return time.Now().Add(time.Duration(randRange(0, electionTimeoutMax-electionTimeoutMin)) * time.Millisecond)
+	return time.Now().Add(time.Duration(labutil.RandRange(0, electionTimeoutMax-electionTimeoutMin)) * time.Millisecond)
 }
 
 // actual intention name of AppendEntries RPC call
@@ -702,7 +703,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		existingEntries := rf.Log[args.PrevLogIndex-rf.LastIncludedIndex:]
 		var i int
 		needPersist := false
-		for i = 0; i < min(len(existingEntries), len(args.Entries)); i++ {
+		for i = 0; i < labutil.Min(len(existingEntries), len(args.Entries)); i++ {
 			if existingEntries[i].Term != args.Entries[i].Term {
 				lablog.Debug(rf.me, lablog.Info, "Discard conflicts: %v", rf.Log[args.PrevLogIndex-rf.LastIncludedIndex+i:])
 				rf.Log = rf.Log[:args.PrevLogIndex-rf.LastIncludedIndex+i]
@@ -725,7 +726,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	if args.LeaderCommit > rf.commitIndex {
 		// If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
 		lastLogIndex, _ := rf.lastLogIndexAndTerm()
-		rf.commitIndex = min(args.LeaderCommit, lastLogIndex)
+		rf.commitIndex = labutil.Min(args.LeaderCommit, lastLogIndex)
 		// going to commit
 		go func() {
 			if !rf.killed() {
@@ -834,8 +835,8 @@ func (rf *Raft) appendEntries(server int, term int) {
 		// if network reorders RPC replies, and to-update nextIndex < current nextIndex for a peer,
 		// DON'T update nextIndex to smaller value (to avoid re-send log entries that follower already has)
 		// So is matchIndex
-		rf.nextIndex[server] = max(args.PrevLogIndex+len(args.Entries)+1, rf.nextIndex[server])
-		rf.matchIndex[server] = max(args.PrevLogIndex+len(args.Entries), rf.matchIndex[server])
+		rf.nextIndex[server] = labutil.Max(args.PrevLogIndex+len(args.Entries)+1, rf.nextIndex[server])
+		rf.matchIndex[server] = labutil.Max(args.PrevLogIndex+len(args.Entries), rf.matchIndex[server])
 		lablog.Debug(rf.me, dTopicOfAppendEntriesRPC(args, lablog.Log), "%s RPC -> S%d success, updated NI:%v, MI:%v", rpcIntent, server, rf.nextIndex, rf.matchIndex)
 
 		// matchIndex updated, maybe some log entries commit-able, going to check
@@ -1428,8 +1429,8 @@ func (rf *Raft) installSnapshot(server int, term int) {
 	// if network reorders RPC replies, and to-update nextIndex < current nextIndex for a peer,
 	// DON'T update nextIndex to smaller value (to avoid re-send log entries that follower already has)
 	// So is matchIndex
-	rf.nextIndex[server] = max(args.LastIncludedIndex+1, rf.nextIndex[server])
-	rf.matchIndex[server] = max(args.LastIncludedIndex, rf.matchIndex[server])
+	rf.nextIndex[server] = labutil.Max(args.LastIncludedIndex+1, rf.nextIndex[server])
+	rf.matchIndex[server] = labutil.Max(args.LastIncludedIndex, rf.matchIndex[server])
 	lablog.Debug(rf.me, lablog.Snap, "IS RPC -> S%d success, updated NI:%v, MI:%v", server, rf.nextIndex, rf.matchIndex)
 
 	if rf.nextIndex[server] > oldNextIndex {
