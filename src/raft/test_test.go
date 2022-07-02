@@ -14,6 +14,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"6.824/lablog"
 )
 
 // The tester generously allows solutions to complete elections in one second
@@ -29,13 +31,13 @@ func TestInitialElection2A(t *testing.T) {
 
 	// is a leader elected?
 	leader1 := cfg.checkOneLeader()
-	Debug(nil, dTest, "InitialElection2A leader1: %d", leader1)
+	lablog.Debug(-1, lablog.Test, "InitialElection2A leader1: %d", leader1)
 
 	// sleep a bit to avoid racing with followers learning of the
 	// election, then check that all peers agree on the term.
 	time.Sleep(50 * time.Millisecond)
 	term1 := cfg.checkTerms()
-	Debug(nil, dTest, "InitialElection2A term1: %d", term1)
+	lablog.Debug(-1, lablog.Test, "InitialElection2A term1: %d", term1)
 	if term1 < 1 {
 		t.Fatalf("term is %v, but should be at least 1", term1)
 	}
@@ -43,14 +45,14 @@ func TestInitialElection2A(t *testing.T) {
 	// does the leader+term stay the same if there is no network failure?
 	time.Sleep(2 * RaftElectionTimeout)
 	term2 := cfg.checkTerms()
-	Debug(nil, dTest, "InitialElection2A term2: %d", term2)
+	lablog.Debug(-1, lablog.Test, "InitialElection2A term2: %d", term2)
 	if term1 != term2 {
 		t.Fatalf("term changed (T%d -> T%d) even though there were no failures", term1, term2)
 	}
 
 	// there should still be a leader.
 	leader2 := cfg.checkOneLeader()
-	Debug(nil, dTest, "InitialElection2A leader2: %d", leader2)
+	lablog.Debug(-1, lablog.Test, "InitialElection2A leader2: %d", leader2)
 	if leader1 != leader2 {
 		t.Fatalf("leader changed (L%d -> L%d) even though there were no failures", leader1, leader2)
 	}
@@ -66,13 +68,13 @@ func TestReElection2A(t *testing.T) {
 	cfg.begin("Test (2A): election after network failure")
 
 	leader1 := cfg.checkOneLeader()
-	Debug(nil, dTest, "ReElection2A leader1: %d", leader1)
+	lablog.Debug(-1, lablog.Test, "ReElection2A leader1: %d", leader1)
 
 	// if the leader disconnects, a new one should be elected.
 	cfg.disconnect(leader1)
-	Debug(nil, dTest, "ReElection2A disconnect leader1: %d", leader1)
+	lablog.Debug(-1, lablog.Test, "ReElection2A disconnect leader1: %d", leader1)
 	leader1p := cfg.checkOneLeader()
-	Debug(nil, dTest, "ReElection2A after disconnect leader1: %d, get new leader1p: %d", leader1, leader1p)
+	lablog.Debug(-1, lablog.Test, "ReElection2A after disconnect leader1: %d, get new leader1p: %d", leader1, leader1p)
 	if leader1 == leader1p {
 		t.Fatalf("no new leader elected when old leader: %d disconnected", leader1)
 	}
@@ -81,9 +83,9 @@ func TestReElection2A(t *testing.T) {
 	// disturb the new leader. and the old leader
 	// should switch to follower.
 	cfg.connect(leader1)
-	Debug(nil, dTest, "ReElection2A rejoin leader1: %d", leader1)
+	lablog.Debug(-1, lablog.Test, "ReElection2A rejoin leader1: %d", leader1)
 	leader2 := cfg.checkOneLeader()
-	Debug(nil, dTest, "ReElection2A after rejoin leader1: %d, get new leader2: %d", leader1, leader2)
+	lablog.Debug(-1, lablog.Test, "ReElection2A after rejoin leader1: %d, get new leader2: %d", leader1, leader2)
 	if leader1p != leader2 {
 		t.Fatalf("new leader: %d lost current term, newer leader: %d", leader1p, leader2)
 	}
@@ -95,7 +97,7 @@ func TestReElection2A(t *testing.T) {
 	// be elected.
 	cfg.disconnect(leader2)
 	cfg.disconnect((leader2 + 1) % servers)
-	Debug(nil, dTest, "ReElection2A disconnect server %d & %d", leader2, (leader2+1)%servers)
+	lablog.Debug(-1, lablog.Test, "ReElection2A disconnect server %d & %d", leader2, (leader2+1)%servers)
 	time.Sleep(2 * RaftElectionTimeout)
 
 	// check that the one connected server
@@ -104,18 +106,18 @@ func TestReElection2A(t *testing.T) {
 
 	// if a quorum arises, it should elect a leader.
 	cfg.connect((leader2 + 1) % servers)
-	Debug(nil, dTest, "ReElection2A rejoin server: %d", (leader2+1)%servers)
+	lablog.Debug(-1, lablog.Test, "ReElection2A rejoin server: %d", (leader2+1)%servers)
 	leader3 := cfg.checkOneLeader()
-	Debug(nil, dTest, "ReElection2A after rejoin server: %d, get new leader3: %d", (leader2+1)%servers, leader3)
+	lablog.Debug(-1, lablog.Test, "ReElection2A after rejoin server: %d, get new leader3: %d", (leader2+1)%servers, leader3)
 	if leader3 == leader2 {
 		t.Fatalf("disconnected server: %d is now leader", leader2)
 	}
 
 	// re-join of last node shouldn't prevent leader from existing.
 	cfg.connect(leader2)
-	Debug(nil, dTest, "ReElection2A rejoin leader2: %d", leader2)
+	lablog.Debug(-1, lablog.Test, "ReElection2A rejoin leader2: %d", leader2)
 	leader4 := cfg.checkOneLeader()
-	Debug(nil, dTest, "ReElection2A after rejoin leader2: %d, get new leader4: %d", leader2, leader4)
+	lablog.Debug(-1, lablog.Test, "ReElection2A after rejoin leader2: %d, get new leader4: %d", leader2, leader4)
 	if leader4 != leader3 {
 		t.Fatalf("re-join of last node: %d changed leader to %d", leader2, leader4)
 	}
@@ -173,7 +175,7 @@ func TestBasicAgree2B(t *testing.T) {
 			t.Fatalf("some have committed before Start()")
 		}
 
-		Debug(nil, dTest, "Start command on index: %d", index)
+		lablog.Debug(-1, lablog.Test, "Start command on index: %d", index)
 		xindex := cfg.one(index*100, servers, false)
 		if xindex != index {
 			t.Fatalf("got index %v but expected %v", xindex, index)
@@ -211,7 +213,7 @@ func TestRPCBytes2B(t *testing.T) {
 	bytes1 := cfg.bytesTotal()
 	got := bytes1 - bytes0
 	expected := int64(servers) * sent
-	Debug(nil, dTest, "Got RPC bytes: %d in %d iters, expected: %d", got, iters, expected)
+	lablog.Debug(-1, lablog.Test, "Got RPC bytes: %d in %d iters, expected: %d", got, iters, expected)
 	if got > expected+50000 {
 		t.Fatalf("too many RPC bytes; got %v, expected %v", got, expected)
 	}
@@ -234,7 +236,7 @@ func TestFollowerFailure2B(t *testing.T) {
 	// disconnect one follower from the network.
 	leader1 := cfg.checkOneLeader()
 	cfg.disconnect((leader1 + 1) % servers)
-	Debug(nil, dTest, "Disconnect server:%d, leader is %d", (leader1+1)%servers, leader1)
+	lablog.Debug(-1, lablog.Test, "Disconnect server:%d, leader is %d", (leader1+1)%servers, leader1)
 
 	// the leader and remaining follower should be
 	// able to agree despite the disconnected follower.
@@ -246,7 +248,7 @@ func TestFollowerFailure2B(t *testing.T) {
 	leader2 := cfg.checkOneLeader()
 	cfg.disconnect((leader2 + 1) % servers)
 	cfg.disconnect((leader2 + 2) % servers)
-	Debug(nil, dTest, "Disconnect server:%d & %d, leader is %d", (leader2+1)%servers, (leader2+2)%servers, leader2)
+	lablog.Debug(-1, lablog.Test, "Disconnect server:%d & %d, leader is %d", (leader2+1)%servers, (leader2+2)%servers, leader2)
 
 	// submit a command.
 	index, _, ok := cfg.rafts[leader2].Start(104)
@@ -283,7 +285,7 @@ func TestLeaderFailure2B(t *testing.T) {
 	// disconnect the first leader.
 	leader1 := cfg.checkOneLeader()
 	cfg.disconnect(leader1)
-	Debug(nil, dTest, "Disconnect leader1: %d", leader1)
+	lablog.Debug(-1, lablog.Test, "Disconnect leader1: %d", leader1)
 
 	// the remaining followers should elect
 	// a new leader.
@@ -294,7 +296,7 @@ func TestLeaderFailure2B(t *testing.T) {
 	// disconnect the new leader.
 	leader2 := cfg.checkOneLeader()
 	cfg.disconnect(leader2)
-	Debug(nil, dTest, "Disconnect leader2: %d", leader2)
+	lablog.Debug(-1, lablog.Test, "Disconnect leader2: %d", leader2)
 
 	// submit a command to each server.
 	for i := 0; i < servers; i++ {
@@ -328,7 +330,7 @@ func TestFailAgree2B(t *testing.T) {
 	// disconnect one follower from the network.
 	leader := cfg.checkOneLeader()
 	cfg.disconnect((leader + 1) % servers)
-	Debug(nil, dTest, "Disconnect server:%d, leader is %d", (leader+1)%servers, leader)
+	lablog.Debug(-1, lablog.Test, "Disconnect server:%d, leader is %d", (leader+1)%servers, leader)
 
 	// the leader and remaining follower should be
 	// able to agree despite the disconnected follower.
@@ -340,7 +342,7 @@ func TestFailAgree2B(t *testing.T) {
 
 	// re-connect
 	cfg.connect((leader + 1) % servers)
-	Debug(nil, dTest, "Rejoin server:%d", (leader+1)%servers)
+	lablog.Debug(-1, lablog.Test, "Rejoin server:%d", (leader+1)%servers)
 
 	// the full set of servers should preserve
 	// previous agreements, and be able to agree
@@ -366,7 +368,7 @@ func TestFailNoAgree2B(t *testing.T) {
 	cfg.disconnect((leader + 1) % servers)
 	cfg.disconnect((leader + 2) % servers)
 	cfg.disconnect((leader + 3) % servers)
-	Debug(nil, dTest, "Disconnect server:%d & %d & %d, leader is %d", (leader+1)%servers, (leader+2)%servers, (leader+3)%servers, leader)
+	lablog.Debug(-1, lablog.Test, "Disconnect server:%d & %d & %d, leader is %d", (leader+1)%servers, (leader+2)%servers, (leader+3)%servers, leader)
 
 	index, _, ok := cfg.rafts[leader].Start(20)
 	if ok != true {
@@ -387,12 +389,12 @@ func TestFailNoAgree2B(t *testing.T) {
 	cfg.connect((leader + 1) % servers)
 	cfg.connect((leader + 2) % servers)
 	cfg.connect((leader + 3) % servers)
-	Debug(nil, dTest, "Rejoin server:%d & %d & %d", (leader+1)%servers, (leader+2)%servers, (leader+3)%servers)
+	lablog.Debug(-1, lablog.Test, "Rejoin server:%d & %d & %d", (leader+1)%servers, (leader+2)%servers, (leader+3)%servers)
 
 	// the disconnected majority may have chosen a leader from
 	// among their own ranks, forgetting index 2.
 	leader2 := cfg.checkOneLeader()
-	Debug(nil, dTest, "After rejoin, new leader is %d", leader2)
+	lablog.Debug(-1, lablog.Test, "After rejoin, new leader is %d", leader2)
 	index2, _, ok2 := cfg.rafts[leader2].Start(30)
 	if ok2 == false {
 		t.Fatalf("leader2 rejected Start()")
@@ -522,7 +524,7 @@ func TestRejoin2B(t *testing.T) {
 	// leader network failure
 	leader1 := cfg.checkOneLeader()
 	cfg.disconnect(leader1)
-	Debug(nil, dTest, "Disconnect leader1: %d", leader1)
+	lablog.Debug(-1, lablog.Test, "Disconnect leader1: %d", leader1)
 
 	// make old leader try to agree on some entries
 	cfg.rafts[leader1].Start(102)
@@ -535,17 +537,17 @@ func TestRejoin2B(t *testing.T) {
 	// new leader network failure
 	leader2 := cfg.checkOneLeader()
 	cfg.disconnect(leader2)
-	Debug(nil, dTest, "Disconnect leader2: %d", leader2)
+	lablog.Debug(-1, lablog.Test, "Disconnect leader2: %d", leader2)
 
 	// old leader connected again
 	cfg.connect(leader1)
-	Debug(nil, dTest, "Rejoin leader1: %d", leader1)
+	lablog.Debug(-1, lablog.Test, "Rejoin leader1: %d", leader1)
 
 	cfg.one(104, 2, true)
 
 	// all together now
 	cfg.connect(leader2)
-	Debug(nil, dTest, "Rejoin leader2: %d", leader2)
+	lablog.Debug(-1, lablog.Test, "Rejoin leader2: %d", leader2)
 
 	cfg.one(105, servers, true)
 
@@ -567,7 +569,7 @@ func TestBackup2B(t *testing.T) {
 	cfg.disconnect((leader1 + 2) % servers)
 	cfg.disconnect((leader1 + 3) % servers)
 	cfg.disconnect((leader1 + 4) % servers)
-	Debug(nil, dTest, "Disconnect server: %d & %d & %d, make partition A", (leader1+2)%servers, (leader1+3)%servers, (leader1+4)%servers)
+	lablog.Debug(-1, lablog.Test, "Disconnect server: %d & %d & %d, make partition A", (leader1+2)%servers, (leader1+3)%servers, (leader1+4)%servers)
 
 	// submit lots of commands that won't commit
 	for i := 0; i < iters; i++ {
@@ -578,13 +580,13 @@ func TestBackup2B(t *testing.T) {
 
 	cfg.disconnect((leader1 + 0) % servers)
 	cfg.disconnect((leader1 + 1) % servers)
-	Debug(nil, dTest, "Disconnect server: %d & %d, all server unreachable", (leader1+0)%servers, (leader1+1)%servers)
+	lablog.Debug(-1, lablog.Test, "Disconnect server: %d & %d, all server unreachable", (leader1+0)%servers, (leader1+1)%servers)
 
 	// allow other partition to recover
 	cfg.connect((leader1 + 2) % servers)
 	cfg.connect((leader1 + 3) % servers)
 	cfg.connect((leader1 + 4) % servers)
-	Debug(nil, dTest, "Rejoin server: %d & %d & %d, bring partition A to life", (leader1+2)%servers, (leader1+3)%servers, (leader1+4)%servers)
+	lablog.Debug(-1, lablog.Test, "Rejoin server: %d & %d & %d, bring partition A to life", (leader1+2)%servers, (leader1+3)%servers, (leader1+4)%servers)
 
 	// lots of successful commands to new group.
 	for i := 0; i < iters; i++ {
@@ -598,7 +600,7 @@ func TestBackup2B(t *testing.T) {
 		other = (leader2 + 1) % servers
 	}
 	cfg.disconnect(other)
-	Debug(nil, dTest, "Disconnect server: %d, remove it from partition A", other)
+	lablog.Debug(-1, lablog.Test, "Disconnect server: %d, remove it from partition A", other)
 
 	// lots more commands that won't commit
 	for i := 0; i < iters; i++ {
@@ -614,7 +616,7 @@ func TestBackup2B(t *testing.T) {
 	cfg.connect((leader1 + 0) % servers)
 	cfg.connect((leader1 + 1) % servers)
 	cfg.connect(other)
-	Debug(nil, dTest, "Rejoin server: %d & %d & %d, bring partition B to life", (leader1+0)%servers, (leader1+1)%servers, other)
+	lablog.Debug(-1, lablog.Test, "Rejoin server: %d & %d & %d, bring partition B to life", (leader1+0)%servers, (leader1+1)%servers, other)
 
 	// lots of successful commands to new group.
 	for i := 0; i < iters; i++ {
@@ -757,7 +759,7 @@ func TestPersist12C(t *testing.T) {
 		cfg.disconnect(i)
 		cfg.connect(i)
 	}
-	Debug(nil, dTest, "Crash, re-start and re-connect all, done")
+	lablog.Debug(-1, lablog.Test, "Crash, re-start and re-connect all, done")
 
 	cfg.one(12, servers, true)
 
@@ -765,27 +767,27 @@ func TestPersist12C(t *testing.T) {
 	cfg.disconnect(leader1)
 	cfg.start1(leader1, cfg.applier)
 	cfg.connect(leader1)
-	Debug(nil, dTest, "Crash, re-start and re-connect leader1:%d, done", leader1)
+	lablog.Debug(-1, lablog.Test, "Crash, re-start and re-connect leader1:%d, done", leader1)
 
 	cfg.one(13, servers, true)
 
 	leader2 := cfg.checkOneLeader()
 	cfg.disconnect(leader2)
-	Debug(nil, dTest, "Disconnect leader2:%d, done", leader2)
+	lablog.Debug(-1, lablog.Test, "Disconnect leader2:%d, done", leader2)
 	cfg.one(14, servers-1, true)
 	cfg.start1(leader2, cfg.applier)
 	cfg.connect(leader2)
-	Debug(nil, dTest, "Crash, re-start and re-connect leader2:%d, done", leader2)
+	lablog.Debug(-1, lablog.Test, "Crash, re-start and re-connect leader2:%d, done", leader2)
 
 	cfg.wait(4, servers, -1) // wait for leader2 to join before killing i3
 
 	i3 := (cfg.checkOneLeader() + 1) % servers
 	cfg.disconnect(i3)
-	Debug(nil, dTest, "Disconnect server:%d, done", i3)
+	lablog.Debug(-1, lablog.Test, "Disconnect server:%d, done", i3)
 	cfg.one(15, servers-1, true)
 	cfg.start1(i3, cfg.applier)
 	cfg.connect(i3)
-	Debug(nil, dTest, "Crash, re-start and re-connect i3:%d, done", i3)
+	lablog.Debug(-1, lablog.Test, "Crash, re-start and re-connect i3:%d, done", i3)
 
 	cfg.one(16, servers, true)
 
@@ -808,7 +810,7 @@ func TestPersist22C(t *testing.T) {
 
 		cfg.disconnect((leader1 + 1) % servers)
 		cfg.disconnect((leader1 + 2) % servers)
-		Debug(nil, dTest, "Disconnect server: %d & %d", (leader1+1)%servers, (leader1+2)%servers)
+		lablog.Debug(-1, lablog.Test, "Disconnect server: %d & %d", (leader1+1)%servers, (leader1+2)%servers)
 
 		cfg.one(10+index, servers-2, true)
 		index++
@@ -816,26 +818,26 @@ func TestPersist22C(t *testing.T) {
 		cfg.disconnect((leader1 + 0) % servers)
 		cfg.disconnect((leader1 + 3) % servers)
 		cfg.disconnect((leader1 + 4) % servers)
-		Debug(nil, dTest, "Disconnect server: %d & %d & %d, all server disconnected", (leader1+0)%servers, (leader1+3)%servers, (leader1+4)%servers)
+		lablog.Debug(-1, lablog.Test, "Disconnect server: %d & %d & %d, all server disconnected", (leader1+0)%servers, (leader1+3)%servers, (leader1+4)%servers)
 
 		cfg.start1((leader1+1)%servers, cfg.applier)
 		cfg.start1((leader1+2)%servers, cfg.applier)
 		cfg.connect((leader1 + 1) % servers)
 		cfg.connect((leader1 + 2) % servers)
-		Debug(nil, dTest, "Crash, re-start and re-connect server: %d & %d", (leader1+1)%servers, (leader1+2)%servers)
+		lablog.Debug(-1, lablog.Test, "Crash, re-start and re-connect server: %d & %d", (leader1+1)%servers, (leader1+2)%servers)
 
 		time.Sleep(RaftElectionTimeout)
 
 		cfg.start1((leader1+3)%servers, cfg.applier)
 		cfg.connect((leader1 + 3) % servers)
-		Debug(nil, dTest, "Crash, re-start and re-connect server: %d", (leader1+3)%servers)
+		lablog.Debug(-1, lablog.Test, "Crash, re-start and re-connect server: %d", (leader1+3)%servers)
 
 		cfg.one(10+index, servers-2, true)
 		index++
 
 		cfg.connect((leader1 + 4) % servers)
 		cfg.connect((leader1 + 0) % servers)
-		Debug(nil, dTest, "Rejoin server: %d & %d", (leader1+4)%servers, (leader1+0)%servers)
+		lablog.Debug(-1, lablog.Test, "Rejoin server: %d & %d", (leader1+4)%servers, (leader1+0)%servers)
 	}
 
 	cfg.one(1000, servers, true)
@@ -854,24 +856,24 @@ func TestPersist32C(t *testing.T) {
 
 	leader := cfg.checkOneLeader()
 	cfg.disconnect((leader + 2) % servers)
-	Debug(nil, dTest, "Disconnect server: %d", (leader+2)%servers)
+	lablog.Debug(-1, lablog.Test, "Disconnect server: %d", (leader+2)%servers)
 
 	cfg.one(102, servers-1, true)
 
 	cfg.crash1((leader + 0) % servers)
 	cfg.crash1((leader + 1) % servers)
-	Debug(nil, dTest, "Crashed server: %d & %d", (leader+0)%servers, (leader+1)%servers)
+	lablog.Debug(-1, lablog.Test, "Crashed server: %d & %d", (leader+0)%servers, (leader+1)%servers)
 	cfg.connect((leader + 2) % servers)
-	Debug(nil, dTest, "Rejoin server: %d", (leader+2)%servers)
+	lablog.Debug(-1, lablog.Test, "Rejoin server: %d", (leader+2)%servers)
 	cfg.start1((leader+0)%servers, cfg.applier)
 	cfg.connect((leader + 0) % servers)
-	Debug(nil, dTest, "Crash, re-start and re-connect server: %d", (leader+0)%servers)
+	lablog.Debug(-1, lablog.Test, "Crash, re-start and re-connect server: %d", (leader+0)%servers)
 
 	cfg.one(103, servers-1, true)
 
 	cfg.start1((leader+1)%servers, cfg.applier)
 	cfg.connect((leader + 1) % servers)
-	Debug(nil, dTest, "Crash, re-start and re-connect server: %d", (leader+1)%servers)
+	lablog.Debug(-1, lablog.Test, "Crash, re-start and re-connect server: %d", (leader+1)%servers)
 
 	cfg.one(104, servers, true)
 
@@ -1229,7 +1231,7 @@ func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash
 		if logSize := cfg.LogSize(); logSize >= MAXLOGSIZE {
 			for i := 0; i < cfg.n; i++ {
 				n := cfg.saved[i].RaftStateSize()
-				Debug(nil, dTest, "S%d have raft state size: %d", i, n)
+				lablog.Debug(-1, lablog.Test, "S%d have raft state size: %d", i, n)
 			}
 			cfg.t.Fatalf("Log size too large, %d >= %d", logSize, MAXLOGSIZE)
 		}

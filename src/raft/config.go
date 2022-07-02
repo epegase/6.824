@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"6.824/labgob"
+	"6.824/lablog"
 	"6.824/labrpc"
 
 	crand "crypto/rand"
@@ -67,7 +68,7 @@ type config struct {
 var ncpu_once sync.Once
 
 func make_config(t *testing.T, n int, unreliable bool, snapshot bool) *config {
-	Debug(nil, dConfig, "%d servers", n)
+	lablog.Debug(-1, lablog.Config, "%d servers", n)
 	ncpu_once.Do(func() {
 		if runtime.NumCPU() < 2 {
 			fmt.Printf("warning: only one CPU, which may conceal locking bugs\n")

@@ -1,0 +1,13 @@
+certifi==2022.5.18.1
+click==8.0.4
+colorama==0.4.4
+commonmark==0.9.1
+future==0.18.2
+pip==21.2.4
+Pygments==2.11.2
+rich==10.16.2
+setuptools==61.2.0
+shellingham==1.3.1
+typer==0.4.1
+typing_extensions==4.1.1
+wheel==0.37.1

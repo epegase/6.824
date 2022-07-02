@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"6.824/labgob"
+	"6.824/lablog"
 	"6.824/labrpc"
 )
 
@@ -70,9 +71,9 @@ func intentOfAppendEntriesRPC(args *AppendEntriesArgs) string {
 	return "AE"
 }
 
-func dTopicOfAppendEntriesRPC(args *AppendEntriesArgs, defaultTopic logTopic) logTopic {
+func dTopicOfAppendEntriesRPC(args *AppendEntriesArgs, defaultTopic lablog.LogTopic) lablog.LogTopic {
 	if len(args.Entries) == 0 {
-		return dHeart
+		return lablog.Heart
 	}
 	return defaultTopic
 }
@@ -215,7 +216,7 @@ func Make(
 	rf.lastApplied = rf.LastIncludedIndex
 
 	lastLogIndex, lastLogTerm := rf.lastLogIndexAndTerm()
-	Debug(rf, dClient, "Started at T:%d with (LII:%d LIT:%d), (LLI:%d LLT:%d)", rf.CurrentTerm, rf.LastIncludedIndex, rf.LastIncludedTerm, lastLogIndex, lastLogTerm)
+	lablog.Debug(rf.me, lablog.Client, "Started at T:%d with (LII:%d LIT:%d), (LLI:%d LLT:%d)", rf.CurrentTerm, rf.LastIncludedIndex, rf.LastIncludedTerm, lastLogIndex, lastLogTerm)
 
 	// start ticker goroutine to start elections
 	go rf.ticker()
@@ -367,17 +368,17 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 
 	if args.Term > rf.CurrentTerm {
 		// If RPC request contains term T > CurrentTerm: set CurrentTerm = T, convert to follower
-		Debug(rf, dTerm, "C%d RV request term is higher(%d > %d), following", args.CandidateId, args.Term, rf.CurrentTerm)
+		lablog.Debug(rf.me, lablog.Term, "C%d RV request term is higher(%d > %d), following", args.CandidateId, args.Term, rf.CurrentTerm)
 		rf.stepDown(args.Term)
 	}
 
-	Debug(rf, dVote, "C%d asking for Vote, T%d", args.CandidateId, args.Term)
+	lablog.Debug(rf.me, lablog.Vote, "C%d asking for Vote, T%d", args.CandidateId, args.Term)
 	if (rf.VotedFor == voteForNull || rf.VotedFor == args.CandidateId) &&
 		!rf.isMyLogMoreUpToDate(args.LastLogIndex, args.LastLogTerm) {
 		// If VotedFor is nul or candidateId,
 		// and candidate's log is at least as up-to-date as receiver's log,
 		// grant vote
-		Debug(rf, dVote, "Granting Vote to C%d at T%d", args.CandidateId, args.Term)
+		lablog.Debug(rf.me, lablog.Vote, "Granting Vote to C%d at T%d", args.CandidateId, args.Term)
 		reply.VoteGranted = true
 		rf.VotedFor = args.CandidateId
 
@@ -434,7 +435,7 @@ func (rf *Raft) constructRequestVoteArgs() *RequestVoteArgs {
 // the struct itself.
 //
 func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *RequestVoteReply) bool {
-	Debug(rf, dVote, "T%d -> S%d Sending RV, LLI:%d LLT:%d", args.Term, server, args.LastLogIndex, args.LastLogTerm)
+	lablog.Debug(rf.me, lablog.Vote, "T%d -> S%d Sending RV, LLI:%d LLT:%d", args.Term, server, args.LastLogIndex, args.LastLogTerm)
 	ok := rf.peers[server].Call("Raft.RequestVote", args, reply)
 	return ok
 }
@@ -465,13 +466,13 @@ func (rf *Raft) requestVote(server int, term int, args *RequestVoteArgs, grant c
 	}
 
 	if !r {
-		Debug(rf, dDrop, "RV been dropped: {T:%d LLI:%d LLT:%d}", args.Term, args.LastLogIndex, args.LastLogTerm)
+		lablog.Debug(rf.me, lablog.Drop, "RV been dropped: {T:%d LLI:%d LLT:%d}", args.Term, args.LastLogIndex, args.LastLogTerm)
 		return
 	}
 
 	if reply.Term > rf.CurrentTerm {
 		// If RPC response contains term T > CurrentTerm: set CurrentTerm = T, convert to follower
-		Debug(rf, dTerm, "RV <- S%d Term is higher(%d > %d), following", server, reply.Term, rf.CurrentTerm)
+		lablog.Debug(rf.me, lablog.Term, "RV <- S%d Term is higher(%d > %d), following", server, reply.Term, rf.CurrentTerm)
 		rf.stepDown(reply.Term)
 		return
 	}
@@ -489,7 +490,7 @@ func (rf *Raft) requestVote(server int, term int, args *RequestVoteArgs, grant c
 	}
 
 	granted = reply.VoteGranted
-	Debug(rf, dVote, "<- S%d Got Vote: %t, at T%d", server, granted, term)
+	lablog.Debug(rf.me, lablog.Vote, "<- S%d Got Vote: %t, at T%d", server, granted, term)
 }
 
 // The collectVote go routine collects votes from peers
@@ -512,7 +513,7 @@ func (rf *Raft) collectVote(term int, grant <-chan bool) {
 				rf.mu.Unlock()
 			} else {
 				rf.winElection()
-				Debug(rf, dLeader, "Achieved Majority for T%d, converting to Leader, NI:%v, MI:%v", rf.CurrentTerm, rf.nextIndex, rf.matchIndex)
+				lablog.Debug(rf.me, lablog.Leader, "Achieved Majority for T%d, converting to Leader, NI:%v, MI:%v", rf.CurrentTerm, rf.nextIndex, rf.matchIndex)
 				rf.mu.Unlock()
 				go rf.pacemaker(term)
 			}
@@ -535,7 +536,7 @@ func (rf *Raft) ticker() {
 			sleepDuration = time.Until(rf.electionAlarm)
 			rf.mu.Unlock()
 		} else {
-			Debug(rf, dTimer, "Not Leader, checking election timeout")
+			lablog.Debug(rf.me, lablog.Timer, "Not Leader, checking election timeout")
 			if rf.electionAlarm.After(time.Now()) {
 				// Not reach election timeout, going to sleep
 				sleepDuration = time.Until(rf.electionAlarm)
@@ -550,7 +551,7 @@ func (rf *Raft) ticker() {
 				// - Increment CurrentTerm
 				rf.CurrentTerm++
 				term := rf.CurrentTerm
-				Debug(rf, dTerm, "Converting to Candidate, calling election T:%d", term)
+				lablog.Debug(rf.me, lablog.Term, "Converting to Candidate, calling election T:%d", term)
 				// - Change to Candidate
 				rf.state = Candidate
 				// - Vote for self
@@ -559,7 +560,7 @@ func (rf *Raft) ticker() {
 				rf.persist()
 
 				// - Reset election timer
-				Debug(rf, dTimer, "Resetting ELT because election")
+				lablog.Debug(rf.me, lablog.Timer, "Resetting ELT because election")
 				rf.electionAlarm = nextElectionAlarm()
 				sleepDuration = time.Until(rf.electionAlarm)
 
@@ -579,7 +580,7 @@ func (rf *Raft) ticker() {
 			}
 		}
 
-		Debug(rf, dTimer, "Ticker going to sleep for %d ms", sleepDuration.Milliseconds())
+		lablog.Debug(rf.me, lablog.Timer, "Ticker going to sleep for %d ms", sleepDuration.Milliseconds())
 		time.Sleep(sleepDuration)
 	}
 }
@@ -624,7 +625,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	if args.Term > rf.CurrentTerm {
 		// If RPC request contains term T > CurrentTerm: set CurrentTerm = T, convert to follower
-		Debug(rf, dTerm, "S%d %s request term is higher(%d > %d), following", args.LeaderId, intentOfAppendEntriesRPC(args), args.Term, rf.CurrentTerm)
+		lablog.Debug(rf.me, lablog.Term, "S%d %s request term is higher(%d > %d), following", args.LeaderId, intentOfAppendEntriesRPC(args), args.Term, rf.CurrentTerm)
 		rf.stepDown(args.Term)
 	}
 
@@ -632,11 +633,11 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		// While waiting for votes, a candidate may receive an AppendEntries RPC from another server claiming to be leader.
 		// If the leader's term is at least as large as the candidate's current term,
 		// then the candidate recognizes the leader as legitimate and returns to follower state
-		Debug(rf, dTerm, "I'm Candidate, S%d %s request term %d >= %d, following", args.LeaderId, intentOfAppendEntriesRPC(args), args.Term, rf.CurrentTerm)
+		lablog.Debug(rf.me, lablog.Term, "I'm Candidate, S%d %s request term %d >= %d, following", args.LeaderId, intentOfAppendEntriesRPC(args), args.Term, rf.CurrentTerm)
 		rf.stepDown(args.Term)
 	}
 
-	Debug(rf, dTimer, "Resetting ELT, received %s from L%d at T%d", intentOfAppendEntriesRPC(args), args.LeaderId, args.Term)
+	lablog.Debug(rf.me, lablog.Timer, "Resetting ELT, received %s from L%d at T%d", intentOfAppendEntriesRPC(args), args.LeaderId, args.Term)
 	rf.electionAlarm = nextElectionAlarm()
 
 	// Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm
@@ -697,13 +698,13 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	if len(args.Entries) > 0 {
 		// If an existing entry conflicts with a new one (same index but different terms),
 		// delete the existing entry and all that follow it
-		Debug(rf, dInfo, "Received: %v from S%d at T%d", args.Entries, args.LeaderId, args.Term)
+		lablog.Debug(rf.me, lablog.Info, "Received: %v from S%d at T%d", args.Entries, args.LeaderId, args.Term)
 		existingEntries := rf.Log[args.PrevLogIndex-rf.LastIncludedIndex:]
 		var i int
 		needPersist := false
 		for i = 0; i < min(len(existingEntries), len(args.Entries)); i++ {
 			if existingEntries[i].Term != args.Entries[i].Term {
-				Debug(rf, dInfo, "Discard conflicts: %v", rf.Log[args.PrevLogIndex-rf.LastIncludedIndex+i:])
+				lablog.Debug(rf.me, lablog.Info, "Discard conflicts: %v", rf.Log[args.PrevLogIndex-rf.LastIncludedIndex+i:])
 				rf.Log = rf.Log[:args.PrevLogIndex-rf.LastIncludedIndex+i]
 				needPersist = true
 				break
@@ -711,7 +712,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		}
 		if i < len(args.Entries) {
 			// Append any new entries not already in the log
-			Debug(rf, dInfo, "Append new: %v from i: %d", args.Entries[i:], i)
+			lablog.Debug(rf.me, lablog.Info, "Append new: %v from i: %d", args.Entries[i:], i)
 			rf.Log = append(rf.Log, args.Entries[i:]...)
 			needPersist = true
 		}
@@ -767,7 +768,7 @@ func (rf *Raft) constructAppendEntriesArgs(server int) *AppendEntriesArgs {
 
 // send a AppendEntries RPC to a server
 func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *AppendEntriesReply) bool {
-	Debug(rf, dTopicOfAppendEntriesRPC(args, dInfo), "T%d -> S%d Sending %s, PLI:%d PLT:%d LC:%d - %v", args.Term, server, intentOfAppendEntriesRPC(args), args.PrevLogIndex, args.PrevLogTerm, args.LeaderCommit, args.Entries)
+	lablog.Debug(rf.me, dTopicOfAppendEntriesRPC(args, lablog.Info), "T%d -> S%d Sending %s, PLI:%d PLT:%d LC:%d - %v", args.Term, server, intentOfAppendEntriesRPC(args), args.PrevLogIndex, args.PrevLogTerm, args.LeaderCommit, args.Entries)
 	ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)
 	return ok
 }
@@ -798,17 +799,17 @@ func (rf *Raft) appendEntries(server int, term int) {
 	rpcIntent := intentOfAppendEntriesRPC(args)
 
 	if !r {
-		Debug(rf, dDrop, "%s been dropped: {T:%d PLI:%d PLT:%d LC:%d log length:%d}", rpcIntent, args.Term, args.PrevLogIndex, args.PrevLogTerm, args.LeaderCommit, len(args.Entries))
+		lablog.Debug(rf.me, lablog.Drop, "%s been dropped: {T:%d PLI:%d PLT:%d LC:%d log length:%d}", rpcIntent, args.Term, args.PrevLogIndex, args.PrevLogTerm, args.LeaderCommit, len(args.Entries))
 		// retry when no reply from the server
 		go rf.appendEntries(server, term)
 		return
 	}
 
-	Debug(rf, dTopicOfAppendEntriesRPC(args, dLog), "%s <- S%d Reply: %+v", rpcIntent, server, *reply)
+	lablog.Debug(rf.me, dTopicOfAppendEntriesRPC(args, lablog.Log), "%s <- S%d Reply: %+v", rpcIntent, server, *reply)
 
 	if reply.Term > rf.CurrentTerm {
 		// If RPC response contains term T > CurrentTerm: set CurrentTerm = T, convert to follower
-		Debug(rf, dTerm, "%s <- S%d Term is higher(%d > %d), following", rpcIntent, server, reply.Term, rf.CurrentTerm)
+		lablog.Debug(rf.me, lablog.Term, "%s <- S%d Term is higher(%d > %d), following", rpcIntent, server, reply.Term, rf.CurrentTerm)
 		rf.stepDown(reply.Term)
 		rf.electionAlarm = nextElectionAlarm()
 		return
@@ -835,7 +836,7 @@ func (rf *Raft) appendEntries(server int, term int) {
 		// So is matchIndex
 		rf.nextIndex[server] = max(args.PrevLogIndex+len(args.Entries)+1, rf.nextIndex[server])
 		rf.matchIndex[server] = max(args.PrevLogIndex+len(args.Entries), rf.matchIndex[server])
-		Debug(rf, dTopicOfAppendEntriesRPC(args, dLog), "%s RPC -> S%d success, updated NI:%v, MI:%v", rpcIntent, server, rf.nextIndex, rf.matchIndex)
+		lablog.Debug(rf.me, dTopicOfAppendEntriesRPC(args, lablog.Log), "%s RPC -> S%d success, updated NI:%v, MI:%v", rpcIntent, server, rf.nextIndex, rf.matchIndex)
 
 		// matchIndex updated, maybe some log entries commit-able, going to check
 		go rf.checkCommit(term)
@@ -930,7 +931,7 @@ func (rf *Raft) Start(command interface{}) (index int, term int, isLeader bool) 
 	})
 	rf.nextIndex[rf.me]++
 	rf.matchIndex[rf.me] = index
-	Debug(rf, dLog2, "Received log: %v, with NI:%v, MI:%v", rf.Log[len(rf.Log)-1], rf.nextIndex, rf.matchIndex)
+	lablog.Debug(rf.me, lablog.Log2, "Received log: %v, with NI:%v, MI:%v", rf.Log[len(rf.Log)-1], rf.nextIndex, rf.matchIndex)
 
 	rf.persist()
 
@@ -962,7 +963,7 @@ func (rf *Raft) pacemaker(term int) {
 		rf.mu.Unlock()
 
 		// send heartbeat to each server
-		Debug(rf, dTimer, "Leader at T%d, broadcasting heartbeats", term)
+		lablog.Debug(rf.me, lablog.Timer, "Leader at T%d, broadcasting heartbeats", term)
 		for i := range rf.peers {
 			if i != rf.me {
 				go rf.appendEntries(i, term)
@@ -1006,7 +1007,7 @@ func (rf *Raft) checkCommit(term int) {
 				}
 			}
 			if cnt >= len(rf.peers)/2+1 {
-				Debug(rf, dCommit, "Commit achieved majority, set CI from %d to %d", rf.commitIndex, n)
+				lablog.Debug(rf.me, lablog.Commit, "Commit achieved majority, set CI from %d to %d", rf.commitIndex, n)
 				rf.commitIndex = n
 			}
 		}
@@ -1070,7 +1071,7 @@ LongRun:
 			// apply log[lastApplied] to state machine
 			rf.lastApplied++
 			logEntry := rf.Log[rf.lastApplied-rf.LastIncludedIndex-1]
-			Debug(rf, dClient, "CI:%d > LA:%d, apply log: %s", rf.commitIndex, rf.lastApplied-1, logEntry)
+			lablog.Debug(rf.me, lablog.Client, "CI:%d > LA:%d, apply log: %s", rf.commitIndex, rf.lastApplied-1, logEntry)
 
 			// release mutex before send ApplyMsg to applyCh
 			rf.mu.Unlock()
@@ -1117,10 +1118,10 @@ func (rf *Raft) raftState() []byte {
 func (rf *Raft) persist() {
 	// Your code here (2C).
 	if data := rf.raftState(); data == nil {
-		Debug(rf, dError, "Write persistence failed")
+		lablog.Debug(rf.me, lablog.Error, "Write persistence failed")
 	} else {
 		lastLogIndex, lastLogTerm := rf.lastLogIndexAndTerm()
-		Debug(rf, dPersist, "Saved state T:%d VF:%d, (LII:%d LIT:%d), (LLI:%d LLT:%d)", rf.CurrentTerm, rf.VotedFor, rf.LastIncludedIndex, rf.LastIncludedTerm, lastLogIndex, lastLogTerm)
+		lablog.Debug(rf.me, lablog.Persist, "Saved state T:%d VF:%d, (LII:%d LIT:%d), (LLI:%d LLT:%d)", rf.CurrentTerm, rf.VotedFor, rf.LastIncludedIndex, rf.LastIncludedTerm, lastLogIndex, lastLogTerm)
 		rf.persister.SaveRaftState(data)
 	}
 }
@@ -1140,7 +1141,7 @@ func (rf *Raft) readPersist(data []byte) {
 		d.Decode(&logs) != nil ||
 		d.Decode(&lastIncludedIndex) != nil ||
 		d.Decode(&lastIncludedTerm) != nil {
-		Debug(rf, dError, "Read broken persistence")
+		lablog.Debug(rf.me, lablog.Error, "Read broken persistence")
 	} else {
 		rf.CurrentTerm = currentTerm
 		rf.VotedFor = votedFor
@@ -1200,10 +1201,10 @@ func (rf *Raft) shouldSuspendSnapshot(index int) (r bool) {
 // save snapshot and raft state, with mutex held
 func (rf *Raft) saveStateAndSnapshot(snapshot []byte) {
 	if data := rf.raftState(); data == nil {
-		Debug(rf, dError, "Write snapshot failed")
+		lablog.Debug(rf.me, lablog.Error, "Write snapshot failed")
 	} else {
 		lastLogIndex, lastLogTerm := rf.lastLogIndexAndTerm()
-		Debug(rf, dSnap, "Saved state: T:%d VF:%d, (LII:%d LIT:%d), (LLI:%d LLT:%d) and snapshot", rf.CurrentTerm, rf.VotedFor, rf.LastIncludedIndex, rf.LastIncludedTerm, lastLogIndex, lastLogTerm)
+		lablog.Debug(rf.me, lablog.Snap, "Saved state: T:%d VF:%d, (LII:%d LIT:%d), (LLI:%d LLT:%d) and snapshot", rf.CurrentTerm, rf.VotedFor, rf.LastIncludedIndex, rf.LastIncludedTerm, lastLogIndex, lastLogTerm)
 		rf.persister.SaveStateAndSnapshot(data, snapshot)
 	}
 }
@@ -1300,11 +1301,11 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 
 	if args.Term > rf.CurrentTerm {
 		// If RPC request contains term T > CurrentTerm: set CurrentTerm = T, convert to follower
-		Debug(rf, dTerm, "S%d IS request term is higher(%d > %d), following", args.LeaderId, args.Term, rf.CurrentTerm)
+		lablog.Debug(rf.me, lablog.Term, "S%d IS request term is higher(%d > %d), following", args.LeaderId, args.Term, rf.CurrentTerm)
 		rf.stepDown(args.Term)
 	}
 
-	Debug(rf, dTimer, "Resetting ELT, received IS from L%d at T%d", args.LeaderId, args.Term)
+	lablog.Debug(rf.me, lablog.Timer, "Resetting ELT, received IS from L%d at T%d", args.LeaderId, args.Term)
 	rf.electionAlarm = nextElectionAlarm()
 
 	if args.LastIncludedIndex <= rf.LastIncludedIndex {
@@ -1313,7 +1314,7 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	}
 
 	// assume args.Offset == 0 and args.Done == true
-	Debug(rf, dSnap, "Received snapshot from S%d at T%d, with (LII:%d LIT:%d)", args.LeaderId, args.Term, args.LastIncludedIndex, args.LastIncludedTerm)
+	lablog.Debug(rf.me, lablog.Snap, "Received snapshot from S%d at T%d, with (LII:%d LIT:%d)", args.LeaderId, args.Term, args.LastIncludedIndex, args.LastIncludedTerm)
 
 	// snapshot accepted, start to install
 
@@ -1341,7 +1342,7 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 			// if existing log entry has same index and term as snapshot's last included entry,
 			// retain log entries following it and reply
 			rf.Log = rf.Log[i+1:]
-			Debug(rf, dSnap, "Retain log after index: %d term: %d, remain %d logs", args.LastIncludedIndex, args.LastIncludedTerm, len(rf.Log))
+			lablog.Debug(rf.me, lablog.Snap, "Retain log after index: %d term: %d, remain %d logs", args.LastIncludedIndex, args.LastIncludedTerm, len(rf.Log))
 			return
 		}
 	}
@@ -1367,7 +1368,7 @@ func (rf *Raft) constructInstallSnapshotArgs() *InstallSnapshotArgs {
 
 // send a InstallSnapshot RPC to a server
 func (rf *Raft) sendInstallSnapshot(server int, args *InstallSnapshotArgs, reply *InstallSnapshotReply) bool {
-	Debug(rf, dSnap, "T%d -> S%d Sending IS, (LII:%d LIT:%d)", args.Term, server, args.LastIncludedIndex, args.LastIncludedTerm)
+	lablog.Debug(rf.me, lablog.Snap, "T%d -> S%d Sending IS, (LII:%d LIT:%d)", args.Term, server, args.LastIncludedIndex, args.LastIncludedTerm)
 	ok := rf.peers[server].Call("Raft.InstallSnapshot", args, reply)
 	return ok
 }
@@ -1396,7 +1397,7 @@ func (rf *Raft) installSnapshot(server int, term int) {
 	}
 
 	if !r {
-		Debug(rf, dDrop, "IS been dropped: {T:%d LII:%d LIT:%d}", args.Term, args.LastIncludedIndex, args.LastIncludedTerm)
+		lablog.Debug(rf.me, lablog.Drop, "IS been dropped: {T:%d LII:%d LIT:%d}", args.Term, args.LastIncludedIndex, args.LastIncludedTerm)
 		// retry when no reply from the server
 		go rf.installSnapshot(server, term)
 		return
@@ -1404,7 +1405,7 @@ func (rf *Raft) installSnapshot(server int, term int) {
 
 	if reply.Term > rf.CurrentTerm {
 		// If RPC response contains term T > CurrentTerm: set CurrentTerm = T, convert to follower
-		Debug(rf, dTerm, "IS <- S%d Term is higher(%d > %d), following", server, reply.Term, rf.CurrentTerm)
+		lablog.Debug(rf.me, lablog.Term, "IS <- S%d Term is higher(%d > %d), following", server, reply.Term, rf.CurrentTerm)
 		rf.stepDown(reply.Term)
 		rf.electionAlarm = nextElectionAlarm()
 		return
@@ -1429,7 +1430,7 @@ func (rf *Raft) installSnapshot(server int, term int) {
 	// So is matchIndex
 	rf.nextIndex[server] = max(args.LastIncludedIndex+1, rf.nextIndex[server])
 	rf.matchIndex[server] = max(args.LastIncludedIndex, rf.matchIndex[server])
-	Debug(rf, dSnap, "IS RPC -> S%d success, updated NI:%v, MI:%v", server, rf.nextIndex, rf.matchIndex)
+	lablog.Debug(rf.me, lablog.Snap, "IS RPC -> S%d success, updated NI:%v, MI:%v", server, rf.nextIndex, rf.matchIndex)
 
 	if rf.nextIndex[server] > oldNextIndex {
 		// nextIndex updated, tell snapshoter to check if any delayed snapshot command can be processed
