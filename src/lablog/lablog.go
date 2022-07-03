@@ -28,23 +28,23 @@ type LogTopic string
 const (
 	Client  LogTopic = "CLNT"
 	Commit  LogTopic = "CMIT"
+	Config  LogTopic = "CONF"
 	Drop    LogTopic = "DROP"
 	Error   LogTopic = "ERRO"
+	Heart   LogTopic = "HART"
 	Info    LogTopic = "INFO"
 	Leader  LogTopic = "LEAD"
 	Log     LogTopic = "LOG1"
 	Log2    LogTopic = "LOG2"
 	Persist LogTopic = "PERS"
 	Snap    LogTopic = "SNAP"
+	Server  LogTopic = "SRVR"
 	Term    LogTopic = "TERM"
 	Test    LogTopic = "TEST"
 	Timer   LogTopic = "TIMR"
 	Trace   LogTopic = "TRCE"
 	Vote    LogTopic = "VOTE"
 	Warn    LogTopic = "WARN"
-	Config  LogTopic = "CONF"
-	Heart   LogTopic = "HART"
-	Server  LogTopic = "SRVR"
 )
 
 var debugStart time.Time
@@ -59,6 +59,10 @@ func init() {
 
 func Debug(serverId int, topic LogTopic, format string, a ...interface{}) {
 	if debugVerbosity >= 1 {
+		if debugVerbosity == 1 && topic == Info {
+			return
+		}
+
 		time := time.Since(debugStart).Microseconds()
 		time /= 100
 		prefix := fmt.Sprintf("%06d %v ", time, string(topic))

@@ -173,7 +173,7 @@ func (cfg *config) ConnectAll() {
 	}
 }
 
-// Sets up 2 partitions with connectivity between servers in each  partition.
+// Sets up 2 partitions with connectivity between servers in each partition.
 func (cfg *config) partition(p1 []int, p2 []int) {
 	cfg.mu.Lock()
 	defer cfg.mu.Unlock()

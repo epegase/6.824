@@ -58,6 +58,7 @@ def main(
     ignore: Optional[str] = typer.Option(None, "--ignore", "-i", callback=list_topics),
     just: Optional[str] = typer.Option(None, "--just", "-j", callback=list_topics),
     show_time: bool = typer.Option(False, "--time"),
+    start_from: int = typer.Option(0, "--start", "-s"),
 ):
     topics = list(TOPICS)
 
@@ -99,6 +100,10 @@ def main(
 
         # To ignore some topics
         if topic not in topics:
+            continue
+
+        # Start from timestamp
+        if time.isnumeric() and int(time) / 10 < start_from:
             continue
 
         msg = " ".join(msg)

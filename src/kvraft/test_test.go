@@ -546,7 +546,6 @@ func TestOnePartition3A(t *testing.T) {
 	case <-done1:
 	case <-time.After(30 * 100 * time.Millisecond):
 		t.Fatalf("Get did not complete")
-	default:
 	}
 
 	check(cfg, t, ck, "1", "15")

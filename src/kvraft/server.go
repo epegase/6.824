@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"6.824/labgob"
 	"6.824/lablog"
 	"6.824/labrpc"
-	"6.824/labutil"
 	"6.824/raft"
 )
 
@@ -19,6 +19,10 @@ type Op struct {
 	Type  opType
 	Key   string
 	Value string
+
+	// for duplicated op detection
+	ClientId int64
+	OpId     int
 }
 
 func (op Op) String() string {
@@ -34,6 +38,30 @@ func (op Op) String() string {
 	}
 }
 
+type applyResult struct {
+	err   Err
+	value string
+	opId  int
+}
+
+func (r applyResult) String() string {
+	switch r.err {
+	case OK:
+		if l := len(r.value); l < 10 {
+			return r.value
+		} else {
+			return fmt.Sprintf("...%s", r.value[l-10:])
+		}
+	default:
+		return string(r.err)
+	}
+}
+
+type commandEntry struct {
+	op      Op
+	replyCh chan applyResult
+}
+
 type KVServer struct {
 	mu      sync.Mutex
 	me      int
@@ -45,15 +73,16 @@ type KVServer struct {
 
 	// Your definitions here.
 
-	tbl  map[string]string   // key-value table
-	ctbl map[int]chan string // map from commandIndex to reply channel
+	tbl        map[string]string     // key-value table
+	commandTbl map[int]commandEntry  // map from commandIndex to commandEntry, maintained by leader
+	clientTbl  map[int64]applyResult // map from clientId to last RPC operation result (for duplicated operation detection)
 }
 
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 	// Your code here.
-	op := Op{Type: opGet, Key: args.Key}
+	op := Op{Type: opGet, Key: args.Key, ClientId: args.ClientId, OpId: args.OpId}
 	kv.mu.Lock()
-	index, _, isLeader := kv.rf.Start(op)
+	index, term, isLeader := kv.rf.Start(op)
 	if !isLeader {
 		kv.mu.Unlock()
 		reply.Err = ErrWrongLeader
@@ -61,25 +90,32 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 	}
 
 	lablog.Debug(kv.me, lablog.Server, "Start op %v at idx: %d", op, index)
-	c := make(chan string) // reply channel for applier goroutine
-	kv.ctbl[index] = c
+	c := make(chan applyResult) // reply channel for applier goroutine
+	kv.commandTbl[index] = commandEntry{op: op, replyCh: c}
 	kv.mu.Unlock()
 
-	// get reply from applier goroutine
-	if s := <-c; s != "" {
-		lablog.Debug(kv.me, lablog.Server, "Op %v at idx: %d get ...%s", op, index, s[labutil.Max(len(s)-10, 0):])
-		reply.Err = OK
-		reply.Value = s
-	} else {
-		reply.Err = ErrNoKey
+	for !kv.killed() {
+		select {
+		case result := <-c:
+			// get reply from applier goroutine
+			lablog.Debug(kv.me, lablog.Server, "Op %v at idx: %d get %v", op, index, result)
+			*reply = GetReply{Err: result.err, Value: result.value}
+			return
+		case <-time.After(10 * time.Millisecond):
+			t, _ := kv.rf.GetState()
+			if term != t {
+				*reply = GetReply{Err: ErrWrongLeader}
+				return
+			}
+		}
 	}
 }
 
 func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 	// Your code here.
-	op := Op{Type: args.Op, Key: args.Key, Value: args.Value}
+	op := Op{Type: args.Op, Key: args.Key, Value: args.Value, ClientId: args.ClientId, OpId: args.OpId}
 	kv.mu.Lock()
-	index, _, isLeader := kv.rf.Start(op)
+	index, term, isLeader := kv.rf.Start(op)
 	if !isLeader {
 		kv.mu.Unlock()
 		reply.Err = ErrWrongLeader
@@ -87,12 +123,24 @@ func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 	}
 
 	lablog.Debug(kv.me, lablog.Server, "Start op %v at idx: %d", op, index)
-	c := make(chan string) // reply channel for applier goroutine
-	kv.ctbl[index] = c
+	c := make(chan applyResult) // reply channel for applier goroutine
+	kv.commandTbl[index] = commandEntry{op: op, replyCh: c}
 	kv.mu.Unlock()
 
-	<-c // get reply from applier goroutine
-	reply.Err = OK
+	for !kv.killed() {
+		select {
+		case result := <-c:
+			// get reply from applier goroutine
+			*reply = PutAppendReply{Err: result.err}
+			return
+		case <-time.After(10 * time.Millisecond):
+			t, _ := kv.rf.GetState()
+			if term != t {
+				*reply = PutAppendReply{Err: ErrWrongLeader}
+				return
+			}
+		}
+	}
 }
 
 //
@@ -141,7 +189,8 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 
 	// You may need initialization code here.
 	kv.tbl = make(map[string]string)
-	kv.ctbl = make(map[int]chan string)
+	kv.commandTbl = make(map[int]commandEntry)
+	kv.clientTbl = make(map[int64]applyResult)
 
 	kv.applyCh = make(chan raft.ApplyMsg)
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
@@ -165,26 +214,47 @@ func (kv *KVServer) applier() {
 
 		op := m.Command.(Op)
 		kv.mu.Lock()
-		switch op.Type {
-		case opGet:
-			r = kv.tbl[op.Key]
-		case opPut:
-			kv.tbl[op.Key] = op.Value
-			r = ""
-		case opAppend:
-			kv.tbl[op.Key] = kv.tbl[op.Key] + op.Value
-			r = ""
+
+		if lastOp := kv.clientTbl[op.ClientId]; lastOp.opId >= op.OpId {
+			// detect duplicated operation
+			// reply with cached result, don't update kv table
+			r = lastOp.value
+		} else {
+			switch op.Type {
+			case opGet:
+				r = kv.tbl[op.Key]
+			case opPut:
+				kv.tbl[op.Key] = op.Value
+				r = ""
+			case opAppend:
+				kv.tbl[op.Key] = kv.tbl[op.Key] + op.Value
+				r = ""
+			}
+
+			// cache operation result
+			kv.clientTbl[op.ClientId] = applyResult{value: r, opId: op.OpId}
 		}
 
-		c, ok := kv.ctbl[m.CommandIndex]
+		ce, ok := kv.commandTbl[m.CommandIndex]
 		kv.mu.Unlock()
 
+		// only leader server maintains commandTbl, followers just apply kv modification
 		if ok {
-			// only leader server maintains ctbl, followers just apply kv modification
-			c <- r
+			if ce.op != op {
+				// Your solution needs to handle a leader that has called Start() for a Clerk's RPC,
+				// but loses its leadership before the request is committed to the log.
+				// In this case you should arrange for the Clerk to re-send the request to other servers
+				// until it finds the new leader.
+				//
+				// One way to do this is for the server to detect that it has lost leadership,
+				// by noticing that a different request has appeared at the index returned by Start()
+				ce.replyCh <- applyResult{err: ErrWrongLeader}
+			} else {
+				ce.replyCh <- applyResult{err: OK, value: r}
+			}
 
 			kv.mu.Lock()
-			delete(kv.ctbl, m.CommandIndex) // delete won't-use reply channel
+			delete(kv.commandTbl, m.CommandIndex) // delete won't-use reply channel
 			kv.mu.Unlock()
 		}
 	}

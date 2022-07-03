@@ -467,7 +467,7 @@ func (rf *Raft) requestVote(server int, term int, args *RequestVoteArgs, grant c
 	}
 
 	if !r {
-		lablog.Debug(rf.me, lablog.Drop, "RV been dropped: {T:%d LLI:%d LLT:%d}", args.Term, args.LastLogIndex, args.LastLogTerm)
+		lablog.Debug(rf.me, lablog.Drop, "-> S%d RV been dropped: {T:%d LLI:%d LLT:%d}", server, args.Term, args.LastLogIndex, args.LastLogTerm)
 		return
 	}
 
@@ -800,7 +800,7 @@ func (rf *Raft) appendEntries(server int, term int) {
 	rpcIntent := intentOfAppendEntriesRPC(args)
 
 	if !r {
-		lablog.Debug(rf.me, lablog.Drop, "%s been dropped: {T:%d PLI:%d PLT:%d LC:%d log length:%d}", rpcIntent, args.Term, args.PrevLogIndex, args.PrevLogTerm, args.LeaderCommit, len(args.Entries))
+		lablog.Debug(rf.me, lablog.Drop, "-> S%d %s been dropped: {T:%d PLI:%d PLT:%d LC:%d log length:%d}", server, rpcIntent, args.Term, args.PrevLogIndex, args.PrevLogTerm, args.LeaderCommit, len(args.Entries))
 		// retry when no reply from the server
 		go rf.appendEntries(server, term)
 		return
@@ -1398,7 +1398,7 @@ func (rf *Raft) installSnapshot(server int, term int) {
 	}
 
 	if !r {
-		lablog.Debug(rf.me, lablog.Drop, "IS been dropped: {T:%d LII:%d LIT:%d}", args.Term, args.LastIncludedIndex, args.LastIncludedTerm)
+		lablog.Debug(rf.me, lablog.Drop, "-> S%d IS been dropped: {T:%d LII:%d LIT:%d}", server, args.Term, args.LastIncludedIndex, args.LastIncludedTerm)
 		// retry when no reply from the server
 		go rf.installSnapshot(server, term)
 		return
