@@ -282,8 +282,9 @@ func (rf *Raft) stepDown(term int) {
 
 	// once step down, trigger any delayed snapshot
 	go func() {
-		if !rf.killed() {
-			rf.snapshotTrigger <- true
+		select {
+		case rf.snapshotTrigger <- true:
+		default:
 		}
 	}()
 }
@@ -729,8 +730,9 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		rf.commitIndex = labutil.Min(args.LeaderCommit, lastLogIndex)
 		// going to commit
 		go func() {
-			if !rf.killed() {
-				rf.commitTrigger <- true
+			select {
+			case rf.commitTrigger <- true:
+			default:
 			}
 		}()
 	}
@@ -845,8 +847,9 @@ func (rf *Raft) appendEntries(server int, term int) {
 		if rf.nextIndex[server] > oldNextIndex {
 			// nextIndex updated, tell snapshoter to check if any delayed snapshot command can be processed
 			go func() {
-				if !rf.killed() {
-					rf.snapshotTrigger <- true
+				select {
+				case rf.snapshotTrigger <- true:
+				default:
 				}
 			}()
 		}
@@ -1017,8 +1020,9 @@ func (rf *Raft) checkCommit(term int) {
 	if oldCommitIndex != rf.commitIndex {
 		// going to commit
 		go func() {
-			if !rf.killed() {
-				rf.commitTrigger <- true
+			select {
+			case rf.commitTrigger <- true:
+			default:
 			}
 		}()
 	}
@@ -1174,8 +1178,9 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	// no need to process immediately
 	// send to queue for background-goroutine snapshoter to process
 	go func() {
-		if !rf.killed() {
-			rf.snapshotCh <- snapshotCmd{index, snapshot}
+		select {
+		case rf.snapshotCh <- snapshotCmd{index, snapshot}:
+		default:
 		}
 	}()
 }
@@ -1332,8 +1337,9 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 
 		// going to send snapshot to service
 		go func() {
-			if !rf.killed() {
-				rf.commitTrigger <- false
+			select {
+			case rf.commitTrigger <- false:
+			default:
 			}
 		}()
 	}()
@@ -1436,8 +1442,9 @@ func (rf *Raft) installSnapshot(server int, term int) {
 	if rf.nextIndex[server] > oldNextIndex {
 		// nextIndex updated, tell snapshoter to check if any delayed snapshot command can be processed
 		go func() {
-			if !rf.killed() {
-				rf.snapshotTrigger <- true
+			select {
+			case rf.snapshotTrigger <- true:
+			default:
 			}
 		}()
 	}
