@@ -189,10 +189,16 @@ func Make(
 		me:        me,
 		dead:      0,
 
-		commitTrigger:   make(chan bool),
+		// IMPORTANT: buffered channel
+		// (unbuffered channel may cause trigger message lost when under high concurrency pressure)
+		commitTrigger: make(chan bool, 1),
+
+		// IMPORTANT: buffered channel
+		// (unbuffered channel may cause trigger message lost when under high concurrency pressure)
+		snapshotTrigger: make(chan bool, 1),
 		snapshotCh:      make(chan snapshotCmd),
-		snapshotTrigger: make(chan bool),
-		quit:            make(chan bool, nLongRunGoroutine),
+
+		quit: make(chan bool, nLongRunGoroutine),
 
 		CurrentTerm:       0,           // initialized to 0 on first boot
 		VotedFor:          voteForNull, // null on startup
