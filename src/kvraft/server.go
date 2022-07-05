@@ -12,6 +12,10 @@ import (
 	"6.824/raft"
 )
 
+const (
+	rpcHandlerCheckRaftTermInterval = 100
+)
+
 type Op struct {
 	// Your definitions here.
 	// Field names must start with capital letters,
@@ -80,6 +84,11 @@ type KVServer struct {
 
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 	// Your code here.
+	if kv.killed() {
+		reply.Err = ErrShutdown
+		return
+	}
+
 	op := Op{Type: opGet, Key: args.Key, ClientId: args.ClientId, OpId: args.OpId}
 	kv.mu.Lock()
 	index, term, isLeader := kv.rf.Start(op)
@@ -94,6 +103,7 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 	kv.commandTbl[index] = commandEntry{op: op, replyCh: c}
 	kv.mu.Unlock()
 
+CheckTermAndWaitReply:
 	for !kv.killed() {
 		select {
 		case result := <-c:
@@ -101,18 +111,28 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 			lablog.Debug(kv.me, lablog.Server, "Op %v at idx: %d get %v", op, index, result)
 			*reply = GetReply{Err: result.err, Value: result.value}
 			return
-		case <-time.After(10 * time.Millisecond):
+		case <-time.After(rpcHandlerCheckRaftTermInterval * time.Millisecond):
 			t, _ := kv.rf.GetState()
 			if term != t {
-				*reply = GetReply{Err: ErrWrongLeader}
-				return
+				reply.Err = ErrWrongLeader
+				break CheckTermAndWaitReply
 			}
 		}
+	}
+
+	go func() { <-c }() // avoid applier from blocking, and avoid resource leak
+	if kv.killed() {
+		reply.Err = ErrShutdown
 	}
 }
 
 func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 	// Your code here.
+	if kv.killed() {
+		reply.Err = ErrShutdown
+		return
+	}
+
 	op := Op{Type: args.Op, Key: args.Key, Value: args.Value, ClientId: args.ClientId, OpId: args.OpId}
 	kv.mu.Lock()
 	index, term, isLeader := kv.rf.Start(op)
@@ -127,19 +147,26 @@ func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 	kv.commandTbl[index] = commandEntry{op: op, replyCh: c}
 	kv.mu.Unlock()
 
+CheckTermAndWaitReply:
 	for !kv.killed() {
 		select {
 		case result := <-c:
 			// get reply from applier goroutine
+			lablog.Debug(kv.me, lablog.Server, "Op %v at idx: %d completed", op, index)
 			*reply = PutAppendReply{Err: result.err}
 			return
-		case <-time.After(10 * time.Millisecond):
+		case <-time.After(rpcHandlerCheckRaftTermInterval * time.Millisecond):
 			t, _ := kv.rf.GetState()
 			if term != t {
-				*reply = PutAppendReply{Err: ErrWrongLeader}
-				return
+				reply.Err = ErrWrongLeader
+				break CheckTermAndWaitReply
 			}
 		}
+	}
+
+	go func() { <-c }() // avoid applier from blocking, and avoid resource leak
+	if kv.killed() {
+		reply.Err = ErrShutdown
 	}
 }
 
@@ -215,10 +242,17 @@ func (kv *KVServer) applier() {
 		op := m.Command.(Op)
 		kv.mu.Lock()
 
-		if lastOp := kv.clientTbl[op.ClientId]; lastOp.opId >= op.OpId {
+		lastOpResult, ok := kv.clientTbl[op.ClientId]
+		if ok {
+			lablog.Debug(kv.me, lablog.Server, "Get op %#v at idx: %d, lastOpId: %d", op, m.CommandIndex, lastOpResult.opId)
+		} else {
+			lablog.Debug(kv.me, lablog.Server, "Get op %#v at idx: %d", op, m.CommandIndex)
+		}
+
+		if lastOpResult.opId >= op.OpId {
 			// detect duplicated operation
 			// reply with cached result, don't update kv table
-			r = lastOp.value
+			r = lastOpResult.value
 		} else {
 			switch op.Type {
 			case opGet:
@@ -236,10 +270,14 @@ func (kv *KVServer) applier() {
 		}
 
 		ce, ok := kv.commandTbl[m.CommandIndex]
+		if ok {
+			delete(kv.commandTbl, m.CommandIndex) // delete won't-use reply channel
+		}
 		kv.mu.Unlock()
 
 		// only leader server maintains commandTbl, followers just apply kv modification
 		if ok {
+			lablog.Debug(kv.me, lablog.Server, "Command tbl found for cidx: %d, %v", m.CommandIndex, ce)
 			if ce.op != op {
 				// Your solution needs to handle a leader that has called Start() for a Clerk's RPC,
 				// but loses its leadership before the request is committed to the log.
@@ -252,10 +290,12 @@ func (kv *KVServer) applier() {
 			} else {
 				ce.replyCh <- applyResult{err: OK, value: r}
 			}
-
-			kv.mu.Lock()
-			delete(kv.commandTbl, m.CommandIndex) // delete won't-use reply channel
-			kv.mu.Unlock()
 		}
+	}
+
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
+	for _, ce := range kv.commandTbl {
+		ce.replyCh <- applyResult{err: ErrShutdown}
 	}
 }

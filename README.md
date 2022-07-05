@@ -28,6 +28,10 @@ b6143938e1a4a0eb1f27f121acdde63c
 
 - Lab3: KV Raft
 
+  ✅ [all test cases, one iteration](./lab-test-results/kvraft.txt)  
+  ✅ [3A test cases, one iteration](./lab-test-results/kvraft3A.txt)  
+  ✅ [3A test cases, hundreds iterations](./lab-test-results/kvraft3A-dstest.txt)  
+
 - Lab4: Sharded KV
 
 ### Progress

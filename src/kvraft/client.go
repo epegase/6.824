@@ -56,8 +56,8 @@ func (ck *Clerk) Get(key string) string {
 	for {
 		reply := &GetReply{}
 		ok := ck.servers[serverId].Call("KVServer.Get", args, reply)
-		if !ok || reply.Err == ErrWrongLeader {
-			// no reply (reply dropped, network partition, etc.) or
+		if !ok || reply.Err == ErrWrongLeader || reply.Err == ErrShutdown {
+			// no reply (reply dropped, network partition, server down, etc.) or
 			// wrong leader,
 			// try next server
 			serverId = (serverId + 1) % len(ck.servers)
@@ -94,16 +94,19 @@ func (ck *Clerk) PutAppend(key string, value string, op opType) {
 		OpId:     ck.opId,
 	}
 	ck.opId++
-	serverId := ck.leader
+	serverId := ck.leader // send to leader first
 	for {
 		reply := &PutAppendReply{}
 		ok := ck.servers[serverId].Call("KVServer.PutAppend", args, reply)
-		if !ok || reply.Err == ErrWrongLeader {
+		if !ok || reply.Err == ErrWrongLeader || reply.Err == ErrShutdown {
+			// no reply (reply dropped, network partition, server down, etc.) or
+			// wrong leader,
+			// try next server
 			serverId = (serverId + 1) % len(ck.servers)
 			continue
 		}
 
-		ck.leader = serverId
+		ck.leader = serverId // remember current leader
 		if reply.Err == OK {
 			return
 		}

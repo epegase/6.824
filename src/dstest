@@ -103,10 +103,12 @@ def print_results(results: Dict[str, Dict[str, StatsMeter]], timing=False):
     print(table)
 
 
-def run_test(test: str, race: bool, timing: bool):
+def run_test(test: str, race: bool, timing: bool, timeout: Optional[str]):
     test_cmd = ["go", "test", f"-run={test}"]
     if race:
         test_cmd.append("-race")
+    if timeout:
+        test_cmd.append(f"-timeout={timeout}")
     if timing:
         test_cmd = ["time"] + test_cmd
     f, path = tempfile.mkstemp()
@@ -142,7 +144,8 @@ def run_tests(
     timing: bool           = typer.Option(False,  '--timing',          '-t',    help='Report timing, only works on macOS'),
     fast_fail: bool        = typer.Option(False,  '--fast-fail',       '-ff',   help='Exit on first failure'),
     until: str             = typer.Option('',     '--until',           '-u',    help='Run test cases until'),
-    part: str              = typer.Option('',     '--part',            '-pa',   help='Run test cases of some parts, separate by ","')
+    part: str              = typer.Option('',     '--part',            '-pa',   help='Run test cases of some parts, separate by ","'),
+    timeout: Optional[str] = typer.Option(None,   '--timeout',         '-to',   help='go test -timeout flag'),
     # fmt: on
 ):
     print(f"[green]Run as `{' '.join(sys.argv)}`[/green]\n")
@@ -251,7 +254,7 @@ def run_tests(
                     n = len(futures)
                     if n < workers:
                         for test in itertools.islice(test_instances, workers-n):
-                            futures.append(executor.submit(run_test, test, race, timing))
+                            futures.append(executor.submit(run_test, test, race, timing, timeout))
 
                     done, not_done = wait(futures, return_when=FIRST_COMPLETED)
 

@@ -6,6 +6,7 @@ const (
 	OK             = "OK"
 	ErrNoKey       = "ErrNoKey"
 	ErrWrongLeader = "ErrWrongLeader"
+	ErrShutdown    = "ErrShutdown"
 )
 
 type opType string
