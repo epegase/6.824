@@ -104,8 +104,17 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 	}
 
 	op := Op{Type: opGet, Key: args.Key, ClientId: args.ClientId, OpId: args.OpId}
+	// IMPORTANT: lock before rf.Start,
+	// to avoid raft finish too quick before kv.commandTbl has set replyCh for this commandIndex
 	kv.mu.Lock()
 	index, term, isLeader := kv.rf.Start(op)
+	if term == 0 {
+		// OPTIMIZATION: is in startup's initial election
+		// reply with error to tell client to wait for a while
+		kv.mu.Unlock()
+		reply.Err = ErrInitElection
+		return
+	}
 	if !isLeader {
 		kv.mu.Unlock()
 		reply.Err = ErrWrongLeader
@@ -150,6 +159,11 @@ func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 	op := Op{Type: args.Op, Key: args.Key, Value: args.Value, ClientId: args.ClientId, OpId: args.OpId}
 	kv.mu.Lock()
 	index, term, isLeader := kv.rf.Start(op)
+	if term == 0 {
+		kv.mu.Unlock()
+		reply.Err = ErrInitElection
+		return
+	}
 	if !isLeader {
 		kv.mu.Unlock()
 		reply.Err = ErrWrongLeader

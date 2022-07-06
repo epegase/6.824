@@ -397,6 +397,10 @@ func (cfg *config) rpcTotal() int {
 	return cfg.net.GetTotalCount()
 }
 
+func (cfg *config) perRpc() map[string]int {
+	return cfg.net.GetPerRPC()
+}
+
 // start a Test.
 // print the Test message.
 // e.g. cfg.begin("Test (2B): RPC counts aren't too high")
@@ -422,6 +426,12 @@ func (cfg *config) end() {
 		npeers := cfg.n                    // number of Raft peers
 		nrpc := cfg.rpcTotal() - cfg.rpcs0 // number of RPC sends
 		ops := atomic.LoadInt32(&cfg.ops)  //  number of clerk get/put/append calls
+
+		if len(os.Getenv("RPCCNT")) > 0 {
+			for rpcName, cnt := range cfg.perRpc() {
+				fmt.Printf("  %s: %d\n", rpcName, cnt)
+			}
+		}
 
 		fmt.Printf("  ... Passed --")
 		fmt.Printf("  %4.1f  %d %5d %4d\n", t, npeers, nrpc, ops)

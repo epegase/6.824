@@ -49,15 +49,18 @@ package labrpc
 //   pass svc to srv.AddService()
 //
 
-import "6.824/labgob"
-import "bytes"
-import "reflect"
-import "sync"
-import "log"
-import "strings"
-import "math/rand"
-import "time"
-import "sync/atomic"
+import (
+	"bytes"
+	"log"
+	"math/rand"
+	"reflect"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"6.824/labgob"
+)
 
 type reqMsg struct {
 	endname  interface{} // name of sending ClientEnd
@@ -135,6 +138,7 @@ type Network struct {
 	done           chan struct{} // closed when Network is cleaned up
 	count          int32         // total RPC count, for statistics
 	bytes          int64         // total bytes send, for statistics
+	perRpcCnt      map[string]int
 }
 
 func MakeNetwork() *Network {
@@ -146,6 +150,7 @@ func MakeNetwork() *Network {
 	rn.connections = map[interface{}](interface{}){}
 	rn.endCh = make(chan reqMsg)
 	rn.done = make(chan struct{})
+	rn.perRpcCnt = map[string]int{}
 
 	// single goroutine to handle all ClientEnd.Call()s
 	go func() {
@@ -154,6 +159,7 @@ func MakeNetwork() *Network {
 			case xreq := <-rn.endCh:
 				atomic.AddInt32(&rn.count, 1)
 				atomic.AddInt64(&rn.bytes, int64(len(xreq.args)))
+				rn.perRpcCnt[xreq.svcMeth]++
 				go rn.processReq(xreq)
 			case <-rn.done:
 				return
@@ -377,6 +383,10 @@ func (rn *Network) GetTotalCount() int {
 func (rn *Network) GetTotalBytes() int64 {
 	x := atomic.LoadInt64(&rn.bytes)
 	return x
+}
+
+func (rn *Network) GetPerRPC() map[string]int {
+	return rn.perRpcCnt
 }
 
 //

@@ -943,13 +943,13 @@ func (rf *Raft) appendEntries(server int, term int) {
 func (rf *Raft) Start(command interface{}) (index int, term int, isLeader bool) {
 	// Your code here (2B).
 	rf.mu.Lock()
+	term = rf.CurrentTerm
 	if rf.state != Leader || rf.killed() {
 		rf.mu.Unlock()
 		return
 	}
 
 	index = rf.nextIndex[rf.me]
-	term = rf.CurrentTerm
 	isLeader = true
 
 	// If command received from client: append entry to local log

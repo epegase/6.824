@@ -3,10 +3,11 @@ package kvraft
 type Err string
 
 const (
-	OK             = "OK"
-	ErrNoKey       = "ErrNoKey"
-	ErrWrongLeader = "ErrWrongLeader"
-	ErrShutdown    = "ErrShutdown"
+	OK              = "OK"
+	ErrNoKey        = "ErrNoKey"
+	ErrWrongLeader  = "ErrWrongLeader"
+	ErrShutdown     = "ErrShutdown"
+	ErrInitElection = "ErrInitElection"
 )
 
 type opType string

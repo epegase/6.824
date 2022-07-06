@@ -1,6 +1,8 @@
 package kvraft
 
 import (
+	"time"
+
 	"6.824/labrpc"
 	"6.824/labutil"
 )
@@ -54,6 +56,11 @@ func (ck *Clerk) Get(key string) string {
 			serverId = (serverId + 1) % len(ck.servers)
 			continue
 		}
+		if reply.Err == ErrInitElection {
+			// sleep for a while, wait for KVServer raft leader election done
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
 
 		ck.leader = serverId // remember current leader
 		if reply.Err == ErrNoKey {
@@ -94,6 +101,11 @@ func (ck *Clerk) PutAppend(key string, value string, op opType) {
 			// wrong leader,
 			// try next server
 			serverId = (serverId + 1) % len(ck.servers)
+			continue
+		}
+		if reply.Err == ErrInitElection {
+			// sleep for a while, wait for KVServer raft leader election done
+			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 
