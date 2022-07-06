@@ -1,10 +1,8 @@
 package kvraft
 
 import (
-	"crypto/rand"
-	"math/big"
-
 	"6.824/labrpc"
+	"6.824/labutil"
 )
 
 type Clerk struct {
@@ -15,18 +13,11 @@ type Clerk struct {
 	opId   int   // operation id, increase monotonically
 }
 
-func nrand() int64 {
-	max := big.NewInt(int64(1) << 62)
-	bigx, _ := rand.Int(rand.Reader, max)
-	x := bigx.Int64()
-	return x
-}
-
 func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 	ck := new(Clerk)
 	ck.servers = servers
 	// You'll have to add code here.
-	ck.me = nrand()
+	ck.me = labutil.Nrand()
 	ck.leader = 0
 	ck.opId = 1
 	return ck

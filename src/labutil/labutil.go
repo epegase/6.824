@@ -1,7 +1,9 @@
 package labutil
 
 import (
-	"math/rand"
+	crand "crypto/rand"
+	"math/big"
+	mrand "math/rand"
 )
 
 func Min(a, b int) int {
@@ -20,5 +22,12 @@ func Max(a, b int) int {
 
 // random range
 func RandRange(from, to int) int {
-	return rand.Intn(to-from) + from
+	return mrand.Intn(to-from) + from
+}
+
+func Nrand() int64 {
+	max := big.NewInt(int64(1) << 62)
+	bigx, _ := crand.Int(crand.Reader, max)
+	x := bigx.Int64()
+	return x
 }

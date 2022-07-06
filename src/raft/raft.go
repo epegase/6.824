@@ -747,6 +747,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 /********************** AppendEntries RPC caller ******************************/
 
 // make AppendEntries RPC args, with mutex held
+// IMPORTANT: return nil to indicate installSnapshot
 func (rf *Raft) constructAppendEntriesArgs(server int) *AppendEntriesArgs {
 	prevLogIndex := rf.nextIndex[server] - 1
 	prevLogTerm := rf.LastIncludedTerm
@@ -755,14 +756,18 @@ func (rf *Raft) constructAppendEntriesArgs(server int) *AppendEntriesArgs {
 	}
 
 	var entries []LogEntry
-	lastLogIndex, _ := rf.lastLogIndexAndTerm()
-	// If last log index ≥ nextIndex for a follower:
-	// send AppendEntries RPC with log entries starting at nextIndex
-	if ni := rf.nextIndex[server]; lastLogIndex >= ni && ni > rf.LastIncludedIndex {
-		newEntries := rf.Log[ni-rf.LastIncludedIndex-1:]
+	if lastLogIndex, _ := rf.lastLogIndexAndTerm(); lastLogIndex <= prevLogIndex {
+		// this follower has all leader's log, no need to send log entries
+		entries = nil
+	} else if prevLogIndex >= rf.LastIncludedIndex {
+		// send AppendEntries RPC with log entries starting at nextIndex
+		newEntries := rf.Log[prevLogIndex-rf.LastIncludedIndex:]
 		entries = make([]LogEntry, len(newEntries))
 		// avoid data-race
 		copy(entries, newEntries)
+	} else {
+		// IMPORTANT: leader's log too short, cannot appendEntries, need to installSnapshot
+		return nil
 	}
 
 	return &AppendEntriesArgs{
@@ -792,6 +797,12 @@ func (rf *Raft) appendEntries(server int, term int) {
 	args := rf.constructAppendEntriesArgs(server)
 	rf.mu.Unlock()
 
+	if args == nil {
+		lablog.Debug(rf.me, lablog.Snap, "-> S%d cannot AE, going to IS", server)
+		go rf.installSnapshot(server, term)
+		return
+	}
+
 	reply := &AppendEntriesReply{}
 	r := rf.sendAppendEntries(server, args, reply)
 
@@ -808,6 +819,14 @@ func (rf *Raft) appendEntries(server int, term int) {
 	rpcIntent := intentOfAppendEntriesRPC(args)
 
 	if !r {
+		if rpcIntent == "HB" {
+			// OPTIMIZATION: don't retry heartbeat rpc
+			return
+		}
+		if args.PrevLogIndex < rf.nextIndex[server]-1 {
+			// OPTIMIZATION: this AppendEntries RPC is out-of-data, don't retry
+			return
+		}
 		lablog.Debug(rf.me, lablog.Drop, "-> S%d %s been dropped: {T:%d PLI:%d PLT:%d LC:%d log length:%d}", server, rpcIntent, args.Term, args.PrevLogIndex, args.PrevLogTerm, args.LeaderCommit, len(args.Entries))
 		// retry when no reply from the server
 		go rf.appendEntries(server, term)
@@ -1116,9 +1135,8 @@ func (rf *Raft) raftState() []byte {
 		e.Encode(rf.LastIncludedIndex) != nil ||
 		e.Encode(rf.LastIncludedTerm) != nil {
 		return nil
-	} else {
-		return w.Bytes()
 	}
+	return w.Bytes()
 }
 
 //
@@ -1153,13 +1171,13 @@ func (rf *Raft) readPersist(data []byte) {
 		d.Decode(&lastIncludedIndex) != nil ||
 		d.Decode(&lastIncludedTerm) != nil {
 		lablog.Debug(rf.me, lablog.Error, "Read broken persistence")
-	} else {
-		rf.CurrentTerm = currentTerm
-		rf.VotedFor = votedFor
-		rf.Log = logs
-		rf.LastIncludedIndex = lastIncludedIndex
-		rf.LastIncludedTerm = lastIncludedTerm
+		return
 	}
+	rf.CurrentTerm = currentTerm
+	rf.VotedFor = votedFor
+	rf.Log = logs
+	rf.LastIncludedIndex = lastIncludedIndex
+	rf.LastIncludedTerm = lastIncludedTerm
 }
 
 /************************* Log Compaction (2D) ********************************/
@@ -1333,8 +1351,8 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	rf.LastIncludedIndex = args.LastIncludedIndex
 	rf.LastIncludedTerm = args.LastIncludedTerm
 	// update commitIndex and lastApplied
-	rf.commitIndex = rf.LastIncludedIndex
-	rf.lastApplied = rf.LastIncludedIndex
+	rf.commitIndex = labutil.Max(rf.LastIncludedIndex, rf.commitIndex)
+	rf.lastApplied = labutil.Max(rf.LastIncludedIndex, rf.lastApplied)
 
 	defer func() {
 		// save snapshot file

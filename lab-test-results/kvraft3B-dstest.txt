@@ -1,0 +1,48 @@
+Run as `./dstest -p24 -n16 -l -g2 -m256 -ff -v -pa 3B -u TestSpeed3B`
+
+Running with 24 workers / 8 CPU cores available
+Running on CPU model: Intel(R) Core(TM) i5-8259U CPU @ 2.30GHz
+Running with verbosity level: 1
+
+Initial iterations: 16
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
+┃ Test               ┃ Failed ┃ Total ┃        Time ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
+│ TestSnapshotRPC3B  │      0 │    16 │ 4.22 ± 0.63 │
+│ TestSnapshotSize3B │      0 │    16 │ 3.00 ± 0.28 │
+│ TestSpeed3B        │      0 │    16 │ 3.37 ± 0.42 │
+└────────────────────┴────────┴───────┴─────────────┘
+Increasing iterations to 32
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
+┃ Test               ┃ Failed ┃ Total ┃        Time ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
+│ TestSnapshotRPC3B  │      0 │    32 │ 4.15 ± 0.55 │
+│ TestSnapshotSize3B │      0 │    32 │ 3.12 ± 0.35 │
+│ TestSpeed3B        │      0 │    32 │ 3.40 ± 0.41 │
+└────────────────────┴────────┴───────┴─────────────┘
+Increasing iterations to 64
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
+┃ Test               ┃ Failed ┃ Total ┃        Time ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
+│ TestSnapshotRPC3B  │      0 │    64 │ 4.45 ± 0.71 │
+│ TestSnapshotSize3B │      0 │    64 │ 3.38 ± 0.37 │
+│ TestSpeed3B        │      0 │    64 │ 3.86 ± 0.50 │
+└────────────────────┴────────┴───────┴─────────────┘
+Increasing iterations to 128
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
+┃ Test               ┃ Failed ┃ Total ┃        Time ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
+│ TestSnapshotRPC3B  │      0 │   128 │ 4.44 ± 0.63 │
+│ TestSnapshotSize3B │      0 │   128 │ 3.53 ± 0.31 │
+│ TestSpeed3B        │      0 │   128 │ 3.95 ± 0.37 │
+└────────────────────┴────────┴───────┴─────────────┘
+Increasing iterations to 256
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
+┃ Test               ┃ Failed ┃ Total ┃        Time ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
+│ TestSnapshotRPC3B  │      0 │   256 │ 4.48 ± 0.61 │
+│ TestSnapshotSize3B │      0 │   256 │ 3.55 ± 0.31 │
+│ TestSpeed3B        │      0 │   256 │ 4.06 ± 0.35 │
+└────────────────────┴────────┴───────┴─────────────┘
+
+Completed 496 iterations in total
