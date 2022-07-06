@@ -287,12 +287,10 @@ func (rf *Raft) stepDown(term int) {
 	rf.persist()
 
 	// once step down, trigger any delayed snapshot
-	go func() {
-		select {
-		case rf.snapshotTrigger <- true:
-		default:
-		}
-	}()
+	select {
+	case rf.snapshotTrigger <- true:
+	default:
+	}
 }
 
 // index and term of last log entry, with mutex held
@@ -735,12 +733,10 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		lastLogIndex, _ := rf.lastLogIndexAndTerm()
 		rf.commitIndex = labutil.Min(args.LeaderCommit, lastLogIndex)
 		// going to commit
-		go func() {
-			select {
-			case rf.commitTrigger <- true:
-			default:
-			}
-		}()
+		select {
+		case rf.commitTrigger <- true:
+		default:
+		}
 	}
 }
 
@@ -871,12 +867,10 @@ func (rf *Raft) appendEntries(server int, term int) {
 
 		if rf.nextIndex[server] > oldNextIndex {
 			// nextIndex updated, tell snapshoter to check if any delayed snapshot command can be processed
-			go func() {
-				select {
-				case rf.snapshotTrigger <- true:
-				default:
-				}
-			}()
+			select {
+			case rf.snapshotTrigger <- true:
+			default:
+			}
 		}
 
 		return
@@ -1044,12 +1038,10 @@ func (rf *Raft) checkCommit(term int) {
 
 	if oldCommitIndex != rf.commitIndex {
 		// going to commit
-		go func() {
-			select {
-			case rf.commitTrigger <- true:
-			default:
-			}
-		}()
+		select {
+		case rf.commitTrigger <- true:
+		default:
+		}
 	}
 }
 
@@ -1201,12 +1193,10 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	// Your code here (2D).
 	// no need to process immediately
 	// send to queue for background-goroutine snapshoter to process
-	go func() {
-		select {
-		case rf.snapshotCh <- snapshotCmd{index, snapshot}:
-		default:
-		}
-	}()
+	select {
+	case rf.snapshotCh <- snapshotCmd{index, snapshot}:
+	default:
+	}
 }
 
 // check if should suspend snapshot taken at index
@@ -1360,12 +1350,10 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 		rf.saveStateAndSnapshot(args.Data)
 
 		// going to send snapshot to service
-		go func() {
-			select {
-			case rf.commitTrigger <- false:
-			default:
-			}
-		}()
+		select {
+		case rf.commitTrigger <- false:
+		default:
+		}
 	}()
 
 	for i := range rf.Log {
@@ -1465,11 +1453,9 @@ func (rf *Raft) installSnapshot(server int, term int) {
 
 	if rf.nextIndex[server] > oldNextIndex {
 		// nextIndex updated, tell snapshoter to check if any delayed snapshot command can be processed
-		go func() {
-			select {
-			case rf.snapshotTrigger <- true:
-			default:
-			}
-		}()
+		select {
+		case rf.snapshotTrigger <- true:
+		default:
+		}
 	}
 }
