@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"log"
 	"math/rand"
+	"os"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -416,6 +417,10 @@ func (cfg *config) rpcTotal() int {
 	return cfg.net.GetTotalCount()
 }
 
+func (cfg *config) perRpc() map[string]int {
+	return cfg.net.GetPerRPC()
+}
+
 func (cfg *config) setunreliable(unrel bool) {
 	cfg.net.Reliable(!unrel)
 }
@@ -643,6 +648,12 @@ func (cfg *config) end() {
 		nbytes := cfg.bytesTotal() - cfg.bytes0 // number of bytes
 		ncmds := cfg.maxIndex - cfg.maxIndex0   // number of Raft agreements reported
 		cfg.mu.Unlock()
+
+		if len(os.Getenv("RPCCNT")) > 0 {
+			for rpcName, cnt := range cfg.perRpc() {
+				fmt.Printf("  %s: %d\n", rpcName, cnt)
+			}
+		}
 
 		fmt.Printf("  ... Passed --")
 		fmt.Printf("  %4.1f  %d %4d %7d %4d\n", t, npeers, nrpc, nbytes, ncmds)

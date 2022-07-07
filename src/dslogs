@@ -40,6 +40,7 @@ TOPICS = {
 
 NO_COLUMN_TOPICS = set(['TEST','CONF'])
 
+HIGHLIGHT = '#00ff00'
 
 def list_topics(value: Optional[str]):
     if value is None:
@@ -57,8 +58,9 @@ def main(
     n_columns: Optional[int] = typer.Option(None, "--columns", "-c"),
     ignore: Optional[str] = typer.Option(None, "--ignore", "-i", callback=list_topics),
     just: Optional[str] = typer.Option(None, "--just", "-j", callback=list_topics),
-    show_time: bool = typer.Option(False, "--time"),
-    start_from: int = typer.Option(0, "--start", "-s"),
+    show_time: bool = typer.Option(False, "--time", help="Show log time in milliseconds"),
+    start_from: int = typer.Option(0, "--start", "-s", help="Filter logs after timestamp, in millisecond"),
+    expr: Optional[str] = typer.Option(None, "--expr", "-e", help="Expression highlight")
 ):
     topics = list(TOPICS)
 
@@ -107,6 +109,9 @@ def main(
             continue
 
         msg = " ".join(msg)
+
+        if expr is not None:
+            msg = msg.replace(expr, f"[{HIGHLIGHT}]{expr}[/{HIGHLIGHT}]")
 
         # Debug calls from the test suite aren't associated with
         # any particular peer. Otherwise we can treat second column

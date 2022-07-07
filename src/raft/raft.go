@@ -161,8 +161,10 @@ type Raft struct {
 
 	// volatile state on leaders, reinitialized after election
 
-	nextIndex  []int // for each server, index of the next log entry to send to that server
-	matchIndex []int // for each server, index of hightest log entry known to be replicated on server
+	nextIndex         []int      // for each server, index of the next log entry to send to that server
+	matchIndex        []int      // for each server, index of hightest log entry known to be replicated on server
+	appendEntriesCh   []chan int // for each follower, channel to trigger AppendEntries RPC call (send serialNo if retry, otherwise 0)
+	installSnapshotCh []chan int // for each follower, channel to trigger InstallSnapshot RPC call (send serialNo if retry, otherwise 0)
 }
 
 //
@@ -211,8 +213,10 @@ func Make(
 		state:         Follower,
 		electionAlarm: initElectionAlarm(),
 
-		nextIndex:  nil, // nil for follower
-		matchIndex: nil, // nil for follower
+		nextIndex:         nil, // nil for follower
+		matchIndex:        nil, // nil for follower
+		appendEntriesCh:   nil, // nil for follower
+		installSnapshotCh: nil, // nil for follower
 	}
 
 	// initialize from state persisted before a crash
@@ -263,8 +267,28 @@ func (rf *Raft) GetState() (term int, isLeader bool) {
 func (rf *Raft) Kill() {
 	atomic.StoreInt32(&rf.dead, 1)
 	// Your code here, if desired.
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
 
 	// to terminate all long-run goroutines
+	// quit entriesAppender
+	for _, c := range rf.appendEntriesCh {
+		if c != nil {
+			close(c)
+		}
+	}
+	// IMPORTANT: not just close channels, but also need to reset appendEntriesCh to avoid send to closed channel
+	rf.appendEntriesCh = nil
+
+	// quit snapshotInstaller
+	for _, c := range rf.installSnapshotCh {
+		if c != nil {
+			close(c)
+		}
+	}
+	// IMPORTANT: not just close channels, but also need to reset installSnapshotCh to avoid send to closed channel
+	rf.installSnapshotCh = nil
+
 	// quit committer, snapshoter
 	for i := 0; i < nLongRunGoroutine; i++ {
 		rf.quit <- true
@@ -283,6 +307,19 @@ func (rf *Raft) stepDown(term int) {
 	rf.VotedFor = voteForNull
 	rf.nextIndex = nil
 	rf.matchIndex = nil
+	// close all channels and reset
+	for _, c := range rf.appendEntriesCh {
+		if c != nil {
+			close(c)
+		}
+	}
+	rf.appendEntriesCh = nil
+	for _, c := range rf.installSnapshotCh {
+		if c != nil {
+			close(c)
+		}
+	}
+	rf.installSnapshotCh = nil
 
 	rf.persist()
 
@@ -340,6 +377,27 @@ func (rf *Raft) winElection() {
 	}
 	// but i know my own highest log entry
 	rf.matchIndex[rf.me] = lastLogIndex
+
+	// start entriesAppender goroutine for each follower, in this term
+	rf.appendEntriesCh = make([]chan int, len(rf.peers))
+	for i := range rf.appendEntriesCh {
+		if i != rf.me {
+			rf.appendEntriesCh[i] = make(chan int, 1)
+			go rf.entriesAppender(i, rf.appendEntriesCh[i], rf.CurrentTerm)
+		}
+	}
+
+	// start snapshotInstaller goroutine for each follower, in this term
+	rf.installSnapshotCh = make([]chan int, len(rf.peers))
+	for i := range rf.installSnapshotCh {
+		if i != rf.me {
+			rf.installSnapshotCh[i] = make(chan int, 1)
+			go rf.snapshotInstaller(i, rf.installSnapshotCh[i], rf.CurrentTerm)
+		}
+	}
+
+	// start pacemaker to send heartbeat to each follower periodically, in this term
+	go rf.pacemaker(rf.CurrentTerm)
 }
 
 type RequestVoteArgs struct {
@@ -521,7 +579,6 @@ func (rf *Raft) collectVote(term int, grant <-chan bool) {
 				rf.winElection()
 				lablog.Debug(rf.me, lablog.Leader, "Achieved Majority for T%d, converting to Leader, NI:%v, MI:%v", rf.CurrentTerm, rf.nextIndex, rf.matchIndex)
 				rf.mu.Unlock()
-				go rf.pacemaker(term)
 			}
 		}
 	}
@@ -784,21 +841,7 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 }
 
 // The appendEntries go routine sends AppendEntries RPC to one peer and deal with reply
-func (rf *Raft) appendEntries(server int, term int) {
-	rf.mu.Lock()
-	if rf.state != Leader || rf.CurrentTerm != term || rf.killed() {
-		rf.mu.Unlock()
-		return
-	}
-	args := rf.constructAppendEntriesArgs(server)
-	rf.mu.Unlock()
-
-	if args == nil {
-		lablog.Debug(rf.me, lablog.Snap, "-> S%d cannot AE, going to IS", server)
-		go rf.installSnapshot(server, term)
-		return
-	}
-
+func (rf *Raft) appendEntries(server int, term int, args *AppendEntriesArgs, serialNo int) {
 	reply := &AppendEntriesReply{}
 	r := rf.sendAppendEntries(server, args, reply)
 
@@ -823,9 +866,12 @@ func (rf *Raft) appendEntries(server int, term int) {
 			// OPTIMIZATION: this AppendEntries RPC is out-of-data, don't retry
 			return
 		}
-		lablog.Debug(rf.me, lablog.Drop, "-> S%d %s been dropped: {T:%d PLI:%d PLT:%d LC:%d log length:%d}", server, rpcIntent, args.Term, args.PrevLogIndex, args.PrevLogTerm, args.LeaderCommit, len(args.Entries))
 		// retry when no reply from the server
-		go rf.appendEntries(server, term)
+		select {
+		case rf.appendEntriesCh[server] <- serialNo: // retry with serialNo
+			lablog.Debug(rf.me, lablog.Drop, "-> S%d %s been dropped: {T:%d PLI:%d PLT:%d LC:%d log length:%d}, retry", server, rpcIntent, args.Term, args.PrevLogIndex, args.PrevLogTerm, args.LeaderCommit, len(args.Entries))
+		default:
+		}
 		return
 	}
 
@@ -913,10 +959,55 @@ func (rf *Raft) appendEntries(server int, term int) {
 
 	if needToInstallSnapshot || rf.nextIndex[server] <= rf.LastIncludedIndex {
 		// leader's log too short, need to install snapshot to follower
-		go rf.installSnapshot(server, term)
+		select {
+		case rf.installSnapshotCh[server] <- 0:
+		default:
+		}
 	} else {
-		// retry
-		go rf.appendEntries(server, term)
+		// try to append MORE previous log entries
+		select {
+		case rf.appendEntriesCh[server] <- 0:
+		default:
+		}
+	}
+}
+
+// The entriesAppender go routine act as single point to call AppendEntries RPC to a server,
+// Upon winning election, leader start this goroutine for each follower in its term,
+// once step down or killed, this goroutine will terminate
+func (rf *Raft) entriesAppender(server int, ch <-chan int, term int) {
+	i := 1 // serialNo
+	for !rf.killed() {
+		serialNo, ok := <-ch
+		if !ok {
+			return // channel closed, should terminate this goroutine
+		}
+		rf.mu.Lock()
+		// re-check
+		if rf.state != Leader || rf.CurrentTerm != term || rf.killed() {
+			rf.mu.Unlock()
+			return
+		}
+
+		args := rf.constructAppendEntriesArgs(server)
+		if args == nil {
+			// cannot append entries, turning to install snapshot
+			select {
+			case rf.installSnapshotCh[server] <- 0:
+				lablog.Debug(rf.me, lablog.Snap, "-> S%d cannot AE, going to IS", server)
+			default:
+			}
+			rf.mu.Unlock()
+			continue
+		}
+		rf.mu.Unlock()
+
+		if serialNo == 0 || // new AppendEntries RPC call
+			serialNo >= i { // is retry, need to check serialNo to ignore out-dated call
+			go rf.appendEntries(server, term, args, i) // provide i as serialNo, to pass back if retry
+			// increment this entriesAppender's serialNo
+			i++
+		}
 	}
 }
 
@@ -937,9 +1028,9 @@ func (rf *Raft) appendEntries(server int, term int) {
 func (rf *Raft) Start(command interface{}) (index int, term int, isLeader bool) {
 	// Your code here (2B).
 	rf.mu.Lock()
+	defer rf.mu.Unlock()
 	term = rf.CurrentTerm
 	if rf.state != Leader || rf.killed() {
-		rf.mu.Unlock()
 		return
 	}
 
@@ -958,12 +1049,13 @@ func (rf *Raft) Start(command interface{}) (index int, term int, isLeader bool) 
 
 	rf.persist()
 
-	rf.mu.Unlock()
-
-	// Send AppendEntries RPCs to all followers, ask for agreement
-	for i := range rf.peers {
+	// trigger entriesAppender for all followers, ask for agreement
+	for i, c := range rf.appendEntriesCh {
 		if i != rf.me {
-			go rf.appendEntries(i, term)
+			select {
+			case c <- 0:
+			default:
+			}
 		}
 	}
 
@@ -983,15 +1075,17 @@ func (rf *Raft) pacemaker(term int) {
 			// end of pacemaker for this term
 			return
 		}
-		rf.mu.Unlock()
-
 		// send heartbeat to each server
 		lablog.Debug(rf.me, lablog.Timer, "Leader at T%d, broadcasting heartbeats", term)
-		for i := range rf.peers {
+		for i, c := range rf.appendEntriesCh {
 			if i != rf.me {
-				go rf.appendEntries(i, term)
+				select {
+				case c <- 0:
+				default:
+				}
 			}
 		}
+		rf.mu.Unlock()
 
 		// repeat during idle periods to prevent election timeout
 		time.Sleep(heartbeatInterval * time.Millisecond)
@@ -1393,15 +1487,7 @@ func (rf *Raft) sendInstallSnapshot(server int, args *InstallSnapshotArgs, reply
 }
 
 // The installSnapshot go routine send InstallSnapshot RPC to one peer and deal with reply
-func (rf *Raft) installSnapshot(server int, term int) {
-	rf.mu.Lock()
-	if rf.state != Leader || rf.CurrentTerm != term || rf.killed() {
-		rf.mu.Unlock()
-		return
-	}
-	args := rf.constructInstallSnapshotArgs()
-	rf.mu.Unlock()
-
+func (rf *Raft) installSnapshot(server int, term int, args *InstallSnapshotArgs, serialNo int) {
 	reply := &InstallSnapshotReply{}
 	r := rf.sendInstallSnapshot(server, args, reply)
 
@@ -1416,9 +1502,12 @@ func (rf *Raft) installSnapshot(server int, term int) {
 	}
 
 	if !r {
-		lablog.Debug(rf.me, lablog.Drop, "-> S%d IS been dropped: {T:%d LII:%d LIT:%d}", server, args.Term, args.LastIncludedIndex, args.LastIncludedTerm)
 		// retry when no reply from the server
-		go rf.installSnapshot(server, term)
+		select {
+		case rf.installSnapshotCh[server] <- serialNo: // retry with serialNo
+			lablog.Debug(rf.me, lablog.Drop, "-> S%d IS been dropped: {T:%d LII:%d LIT:%d}, retry", server, args.Term, args.LastIncludedIndex, args.LastIncludedTerm)
+		default:
+		}
 		return
 	}
 
@@ -1457,5 +1546,38 @@ func (rf *Raft) installSnapshot(server int, term int) {
 		case rf.snapshotTrigger <- true:
 		default:
 		}
+	}
+}
+
+// The snapshotInstaller go routine act as single point to call InstallSnapshot RPC to a server,
+// Upon winning election, leader start this goroutine for each follower in its term,
+// once step down or killed, this goroutine will terminate
+func (rf *Raft) snapshotInstaller(server int, ch <-chan int, term int) {
+	var lastArgs *InstallSnapshotArgs // record last RPC's args
+	i := 1                            // serialNo
+	for !rf.killed() {
+		serialNo, ok := <-ch
+		if !ok {
+			return // channel closed, should terminate this goroutine
+		}
+		rf.mu.Lock()
+		// re-check
+		if rf.state != Leader || rf.CurrentTerm != term || rf.killed() {
+			rf.mu.Unlock()
+			return
+		}
+
+		if serialNo >= i || // is retry, need to check serialNo to ignore out-dated call
+			lastArgs == nil || // is first call
+			rf.LastIncludedIndex > lastArgs.LastIncludedIndex { // has newer snapshot
+			args := rf.constructInstallSnapshotArgs()
+			go rf.installSnapshot(server, term, args, i) // provide i as serialNo, to pass back if retry
+			// record new args as lastArgs
+			lastArgs = args
+			// increment this snapshotInstaller's serialNo
+			i++
+		}
+
+		rf.mu.Unlock()
 	}
 }
