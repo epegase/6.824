@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"6.824/lablog"
 	"6.824/models"
 	"6.824/porcupine"
 )
@@ -256,7 +257,7 @@ func GenericTest(t *testing.T, part string, nclients int, nservers int, unreliab
 		clnts[i] = make(chan int)
 	}
 	for i := 0; i < 3; i++ {
-		// log.Printf("Iteration %v\n", i)
+		lablog.Debug(-1, lablog.Test, "Iteration %v\n", i)
 		atomic.StoreInt32(&done_clients, 0)
 		atomic.StoreInt32(&done_partitioner, 0)
 		go spawn_clients_and_wait(t, cfg, nclients, func(cli int, myck *Clerk, t *testing.T) {

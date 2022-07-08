@@ -33,8 +33,6 @@ import (
 const (
 	// special NULL value for voteFor
 	voteForNull = -1
-	// number of long-run goroutines that need quit signal
-	nLongRunGoroutine = 2
 	// election timeout range, in millisecond
 	electionTimeoutMax = 1200
 	electionTimeoutMin = 800
@@ -112,8 +110,8 @@ type LogEntry struct {
 // Stringer
 func (e LogEntry) String() string {
 	commandStr := fmt.Sprintf("%v", e.Command)
-	if len(commandStr) > 10 {
-		commandStr = commandStr[:10]
+	if len(commandStr) > 15 {
+		commandStr = commandStr[:15]
 	}
 	return fmt.Sprintf("{I:%d T:%d C:%s}", e.Index, e.Term, commandStr)
 }
@@ -138,7 +136,6 @@ type Raft struct {
 	commitTrigger   chan bool
 	snapshotCh      chan snapshotCmd // tell snapshoter to take a snapshot
 	snapshotTrigger chan bool        // tell snapshoter to save delayed snapshot
-	quit            chan bool        // tell long-run goroutines to exit
 
 	// Your data here (2A, 2B, 2C).
 	// Look at the paper's Figure 2 for a description of what
@@ -200,8 +197,6 @@ func Make(
 		snapshotTrigger: make(chan bool, 1),
 		snapshotCh:      make(chan snapshotCmd),
 
-		quit: make(chan bool, nLongRunGoroutine),
-
 		CurrentTerm:       0,           // initialized to 0 on first boot
 		VotedFor:          voteForNull, // null on startup
 		Log:               []LogEntry{},
@@ -233,12 +228,12 @@ func Make(
 	go rf.ticker()
 
 	// start committer goroutine to wait for commit trigger signal, advance lastApplied and apply msg to client
-	go rf.committer(applyCh)
+	go rf.committer(applyCh, rf.commitTrigger)
 
 	// start snapshoter goroutine to wait for snapshot command that will sent through snapshotCh
 	// if is leader, maybe keep a small amount of trailing log entries for lagging followers to catch up
 	// so leader's snapshot will be delayed and be triggered by snapshotTrigger each time leader's nextIndex updated
-	go rf.snapshoter()
+	go rf.snapshoter(rf.snapshotTrigger)
 
 	return rf
 }
@@ -289,10 +284,17 @@ func (rf *Raft) Kill() {
 	// IMPORTANT: not just close channels, but also need to reset installSnapshotCh to avoid send to closed channel
 	rf.installSnapshotCh = nil
 
-	// quit committer, snapshoter
-	for i := 0; i < nLongRunGoroutine; i++ {
-		rf.quit <- true
+	// quit committer
+	if rf.commitTrigger != nil {
+		close(rf.commitTrigger)
 	}
+	// IMPORTANT: not just close channels, but also need to reset commitTrigger to avoid send to closed channel
+	rf.commitTrigger = nil
+
+	// quit snapshoter
+	close(rf.snapshotTrigger)
+	// IMPORTANT: not just close channels, but also need to reset snapshotTrigger to avoid send to closed channel
+	rf.snapshotTrigger = nil
 }
 
 func (rf *Raft) killed() bool {
@@ -1143,21 +1145,29 @@ func (rf *Raft) checkCommit(term int) {
 // compare commitIndex with lastApplied,
 // increment lastApplied if commit-safe
 // and if any log applied, send to client through applyCh
-func (rf *Raft) committer(applyCh chan<- ApplyMsg) {
-	var isCommit bool
+func (rf *Raft) committer(applyCh chan<- ApplyMsg, triggerCh chan bool) {
+	defer func() {
+		// IMPORTANT: close channel to avoid resource leak
+		close(applyCh)
+		// IMPORTANT: drain commitTrigger to avoid goroutine resource leak
+		for range triggerCh {
+		}
+	}()
 
-LongRun:
 	// long-run singleton go routine, should check if killed
 	for !rf.killed() {
-		select {
-		case <-rf.quit:
-			break LongRun // terminate long-run goroutine
-		case isCommit = <-rf.commitTrigger: // wait for signal
+		isCommit, ok := <-triggerCh // wait for signal
+
+		if !ok {
+			return
 		}
 
+		rf.mu.Lock()
+
 		if !isCommit {
+			// re-enable commitTrigger to be ready to accept commit signal
+			rf.commitTrigger = triggerCh
 			// is received snapshot from leader
-			rf.mu.Lock()
 			data := rf.persister.ReadSnapshot()
 			if rf.LastIncludedIndex == 0 || len(data) == 0 {
 				// snapshot data invalid
@@ -1179,7 +1189,6 @@ LongRun:
 			continue
 		}
 
-		rf.mu.Lock()
 		// try to apply as many as possible
 		for rf.commitIndex > rf.lastApplied {
 			// If commitIndex > lastApplied:
@@ -1204,9 +1213,6 @@ LongRun:
 
 		rf.mu.Unlock()
 	}
-
-	// IMPORTANT: close channel to avoid resource leak
-	close(applyCh)
 }
 
 /************************* Persist (2C) ***************************************/
@@ -1293,7 +1299,7 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	}
 }
 
-// check if should suspend snapshot taken at index
+// check if should suspend snapshot taken at index, with mutex held
 // leader: suspend if any follower maybe lag (in a small amount, but not too far away, bound by leaderKeepLogAmount)
 // otherwise: no suspend
 func (rf *Raft) shouldSuspendSnapshot(index int) (r bool) {
@@ -1324,46 +1330,46 @@ func (rf *Raft) saveStateAndSnapshot(snapshot []byte) {
 }
 
 // The snapshoter go routine run as background-goroutine to process snapshot command
-func (rf *Raft) snapshoter() {
+func (rf *Raft) snapshoter(triggerCh <-chan bool) {
 	// keep JUST one snapshot command
 	var index int
 	var snapshot []byte
 	// may set to nil to block receiving from snapshotCh, to prevent current snapshot from being overwritten
 	cmdCh := rf.snapshotCh
 
-LongRun:
 	// long-run singleton go routine, should check if killed
 	for !rf.killed() {
 		select {
-		case <-rf.quit:
-			break LongRun // terminate long-run goroutine
 		case cmd := <-cmdCh:
 			index, snapshot = cmd.index, cmd.snapshot
-		case <-rf.snapshotTrigger:
-			if cmdCh == nil {
-				// receiving from snapshotCh is blocked =>
-				// there is a delayed snapshot waiting to be processed and persisted,
-				// re-check if can process this delayed snapshot
-				rf.mu.Lock()
-				if rf.shouldSuspendSnapshot(index) {
-					// no => wait for new trigger signal
-					rf.mu.Unlock()
-					continue
-				}
-				rf.mu.Unlock()
-				// yes => restore snapshotCh, ready to receive new snapshot command
-				cmdCh = rf.snapshotCh
+		case _, ok := <-triggerCh:
+			if !ok {
+				return
 			}
 		}
 
 		rf.mu.Lock()
+		shouldSuspend := rf.shouldSuspendSnapshot(index)
+
+		if cmdCh == nil {
+			// receiving from snapshotCh is blocked =>
+			// there is a delayed snapshot waiting to be processed and persisted,
+			// re-check if can process this delayed snapshot
+			if shouldSuspend {
+				// no => wait for new trigger signal
+				rf.mu.Unlock()
+				continue
+			}
+			// yes => restore snapshotCh, ready to receive new snapshot command
+			cmdCh = rf.snapshotCh
+		}
 
 		switch {
 		case index <= rf.LastIncludedIndex:
 			// this snapshot has been covered by LastIncludedIndex =>
 			// this snapshot is out-of-date =>
 			// ignore
-		case rf.shouldSuspendSnapshot(index):
+		case shouldSuspend:
 			// snapshot is up-to-date, but should suspend,
 			// so block receiving from snapshotCh, and wait for trigger signal
 			cmdCh = nil
@@ -1443,10 +1449,16 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 		// discard any existing or partial snapshot with a smaller index (done by persister)
 		rf.saveStateAndSnapshot(args.Data)
 
-		// going to send snapshot to service
-		select {
-		case rf.commitTrigger <- false:
-		default:
+		if rf.commitTrigger != nil {
+			// going to send snapshot to service
+			// CANNOT lose this trigger signal, MUST wait channel sending done,
+			// so cannot use select-default scheme
+			go func(ch chan<- bool) { ch <- false }(rf.commitTrigger)
+			// upon received a snapshot, must notify upper-level service ASAP,
+			// before ANY new commit signal,
+			// so set commitTrigger to nil to block other goroutines from sending to this channel.
+			// committer will re-enable this channel once it start to process snapshot and send back to upper-level service
+			rf.commitTrigger = nil
 		}
 	}()
 
@@ -1555,28 +1567,39 @@ func (rf *Raft) installSnapshot(server int, term int, args *InstallSnapshotArgs,
 func (rf *Raft) snapshotInstaller(server int, ch <-chan int, term int) {
 	var lastArgs *InstallSnapshotArgs // record last RPC's args
 	i := 1                            // serialNo
+	currentSnapshotSendCnt := 0       // count of outstanding InstallSnapshot RPC calls
 	for !rf.killed() {
 		serialNo, ok := <-ch
 		if !ok {
 			return // channel closed, should terminate this goroutine
 		}
 		rf.mu.Lock()
-		// re-check
-		if rf.state != Leader || rf.CurrentTerm != term || rf.killed() {
+
+		switch {
+		case rf.state != Leader || rf.CurrentTerm != term || rf.killed():
+			// re-check
 			rf.mu.Unlock()
 			return
-		}
-
-		if serialNo >= i || // is retry, need to check serialNo to ignore out-dated call
-			lastArgs == nil || // is first call
-			rf.LastIncludedIndex > lastArgs.LastIncludedIndex { // has newer snapshot
-			args := rf.constructInstallSnapshotArgs()
-			go rf.installSnapshot(server, term, args, i) // provide i as serialNo, to pass back if retry
-			// record new args as lastArgs
-			lastArgs = args
+		case lastArgs == nil || rf.LastIncludedIndex > lastArgs.LastIncludedIndex:
+			lastArgs = rf.constructInstallSnapshotArgs()
+			// reset count of outstanding InstallSnapshot RPC calls
+			currentSnapshotSendCnt = 1
 			// increment this snapshotInstaller's serialNo
 			i++
+		case serialNo >= i:
+			// is retry, need to check serialNo to ignore out-dated call
+			// increment this snapshotInstaller's serialNo
+			i++
+		case rf.LastIncludedIndex == lastArgs.LastIncludedIndex && currentSnapshotSendCnt < 3:
+			// send more to speed up, in case of network delay or drop
+			// increment count of outstanding InstallSnapshot RPC calls
+			currentSnapshotSendCnt++
+		default:
+			rf.mu.Unlock()
+			continue
 		}
+
+		go rf.installSnapshot(server, term, lastArgs, i) // provide i as serialNo, to pass back if retry
 
 		rf.mu.Unlock()
 	}

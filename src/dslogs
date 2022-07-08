@@ -59,7 +59,8 @@ def main(
     ignore: Optional[str] = typer.Option(None, "--ignore", "-i", callback=list_topics),
     just: Optional[str] = typer.Option(None, "--just", "-j", callback=list_topics),
     show_time: bool = typer.Option(False, "--time", help="Show log time in milliseconds"),
-    start_from: int = typer.Option(0, "--start", "-s", help="Filter logs after timestamp, in millisecond"),
+    start_from: Optional[int] = typer.Option(None, "--start", help="Filter logs after timestamp, in millisecond"),
+    duration: Optional[int] = typer.Option(None, "--duration", help="Cooperate with --start, filter logs in duration, in millisecond"),
     expr: Optional[str] = typer.Option(None, "--expr", "-e", help="Expression highlight")
 ):
     topics = list(TOPICS)
@@ -105,8 +106,11 @@ def main(
             continue
 
         # Start from timestamp
-        if time.isnumeric() and int(time) / 10 < start_from:
-            continue
+        if time.isnumeric() and start_from is not None:
+            if int(time) / 10 < start_from:
+                continue
+            if duration is not None and int(time) / 10 > (start_from+duration):
+                continue
 
         msg = " ".join(msg)
 

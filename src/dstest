@@ -103,8 +103,8 @@ def print_results(results: Dict[str, Dict[str, StatsMeter]], timing=False):
     print(table)
 
 
-def run_test(test: str, race: bool, timing: bool, timeout: Optional[str]):
-    test_cmd = ["go", "test", f"-run={test}"]
+def run_test(gobin: str, test: str, race: bool, timing: bool, timeout: Optional[str]):
+    test_cmd = [gobin, "test", f"-run={test}"]
     if race:
         test_cmd.append("-race")
     if timeout:
@@ -146,6 +146,7 @@ def run_tests(
     until: str             = typer.Option('',     '--until',           '-u',    help='Run test cases until'),
     part: str              = typer.Option('',     '--part',            '-pa',   help='Run test cases of some parts, separate by ","'),
     timeout: Optional[str] = typer.Option(None,   '--timeout',         '-to',   help='go test -timeout flag'),
+    gobin: Optional[str]   = typer.Option('go',   '--gobin',           '-gb',   help='go bin to run test'),
     # fmt: on
 ):
     print(f"[green]Run as `{' '.join(sys.argv)}`[/green]\n")
@@ -191,6 +192,9 @@ def run_tests(
         m = re.search('Model name:\s*(.*)', lscpu)
         if m:
             print(f'[yellow]Running on CPU model: {m[1]}[/yellow]')
+
+    go_version = subprocess.check_output(gobin + ' version', shell=True).strip().decode()
+    print(f'[yellow]Running with {go_version}[/yellow]')
 
     if verbose > 0:
         print(f"[yellow]Running with verbosity level: {verbose}[/yellow]")
@@ -254,7 +258,7 @@ def run_tests(
                     n = len(futures)
                     if n < workers:
                         for test in itertools.islice(test_instances, workers-n):
-                            futures.append(executor.submit(run_test, test, race, timing, timeout))
+                            futures.append(executor.submit(run_test, gobin, test, race, timing, timeout))
 
                     done, not_done = wait(futures, return_when=FIRST_COMPLETED)
 

@@ -121,7 +121,7 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 		return
 	}
 
-	lablog.Debug(kv.me, lablog.Server, "Start op %v at idx: %d", op, index)
+	lablog.Debug(kv.me, lablog.Server, "Start op %v at idx: %d, from %d of client %d", op, index, op.OpId, op.ClientId)
 	c := make(chan applyResult) // reply channel for applier goroutine
 	kv.commandTbl[index] = commandEntry{op: op, replyCh: c}
 	kv.mu.Unlock()
@@ -170,7 +170,7 @@ func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 		return
 	}
 
-	lablog.Debug(kv.me, lablog.Server, "Start op %v at idx: %d", op, index)
+	lablog.Debug(kv.me, lablog.Server, "Start op %v at idx: %d, from %d of client %d", op, index, op.OpId, op.ClientId)
 	c := make(chan applyResult) // reply channel for applier goroutine
 	kv.commandTbl[index] = commandEntry{op: op, replyCh: c}
 	kv.mu.Unlock()
@@ -244,7 +244,7 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	applyCh := make(chan raft.ApplyMsg)
 	kv.rf = raft.Make(servers, me, persister, applyCh)
 	// You may need initialization code here.
-	kv.appliedCommandIndex = 0
+	kv.appliedCommandIndex = kv.rf.LastIncludedIndex
 	kv.commandTbl = make(map[int]commandEntry)
 	kv.Tbl = make(map[string]string)
 	kv.ClientTbl = make(map[int64]applyResult)
@@ -256,7 +256,7 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	// let applier trigger snapshoter to take a snapshot when certain amount of msgs have been applied
 	snapshotTrigger := make(chan bool, 1)
 
-	go kv.applier(applyCh, snapshotTrigger)
+	go kv.applier(applyCh, snapshotTrigger, kv.appliedCommandIndex)
 
 	go kv.snapshoter(persister, snapshotTrigger)
 
@@ -267,9 +267,8 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 // modify key-value table accordingly,
 // reply modified result back to KVServer's RPC handler, if any, through channel identified by commandIndex
 // after every snapshoterAppliedMsgInterval msgs, trigger a snapshot
-func (kv *KVServer) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger chan<- bool) {
+func (kv *KVServer) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger chan<- bool, lastSnapshoterTriggeredCommandIndex int) {
 	var r string
-	lastSnapshoterTriggeredCommandIndex := 0 // record commandIndex when last time triggered snapshoter
 
 	for m := range applyCh {
 		if m.SnapshotValid {
@@ -295,9 +294,9 @@ func (kv *KVServer) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger chan<-
 			// certain amount of msgs have been applied, going to tell snapshoter to take a snapshot
 			select {
 			case snapshotTrigger <- true:
+				lastSnapshoterTriggeredCommandIndex = m.CommandIndex // record as last time triggered commandIndex
 			default:
 			}
-			lastSnapshoterTriggeredCommandIndex = m.CommandIndex // record as last time triggered commandIndex
 		}
 
 		op := m.Command.(Op)
