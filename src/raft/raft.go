@@ -1189,8 +1189,10 @@ func (rf *Raft) committer(applyCh chan<- ApplyMsg, triggerCh chan bool) {
 			continue
 		}
 
-		// try to apply as many as possible
-		for rf.commitIndex > rf.lastApplied {
+		// IMPORTANT: if there is a snapshot waiting to send back to upper-level service,
+		// the snapshot should apply ASAP, and avoid ANY MORE log entries being applied.
+		// Otherwise, try to apply as many log entries as possible
+		for rf.commitTrigger != nil && rf.commitIndex > rf.lastApplied {
 			// If commitIndex > lastApplied:
 			// increment lastApplied,
 			// apply log[lastApplied] to state machine
