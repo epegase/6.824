@@ -61,7 +61,8 @@ def main(
     show_time: bool = typer.Option(False, "--time", help="Show log time in milliseconds"),
     start_from: Optional[int] = typer.Option(None, "--start", help="Filter logs after timestamp, in millisecond"),
     duration: Optional[int] = typer.Option(None, "--duration", help="Cooperate with --start, filter logs in duration, in millisecond"),
-    expr: Optional[str] = typer.Option(None, "--expr", "-e", help="Expression highlight")
+    expr: Optional[str] = typer.Option(None, "--expr", help="Expression highlight"),
+    server_ids: Optional[str] = typer.Option(None, "--server", help="Filter of server ids"),
 ):
     topics = list(TOPICS)
 
@@ -76,6 +77,9 @@ def main(
     topics = set(topics)
     console = Console()
     width = console.size.width
+
+    if server_ids is not None:
+        server_ids_set = set(int(i) for i in server_ids.split(','))
 
     panic = False
     for line in input_:
@@ -122,6 +126,9 @@ def main(
         # as peer id
         if topic not in NO_COLUMN_TOPICS:
             i = int(msg[1])
+
+            if server_ids is not None and i not in server_ids_set:
+                continue
 
         # Colorize output by using rich syntax when needed
         if colorize and topic in TOPICS:

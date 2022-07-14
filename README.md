@@ -6,7 +6,7 @@ schedule html md5:
 > curl https://pdos.csail.mit.edu/6.824/schedule.html | md5sum
 b6143938e1a4a0eb1f27f121acdde63c
 ```
-### Test results for all 6.824 labs
+### Labs
 
 - Lab1: MapReduce
 
@@ -29,8 +29,12 @@ b6143938e1a4a0eb1f27f121acdde63c
 - Lab3: KV Raft
 
   ✅ [all test cases, one iteration](./lab-test-results/kvraft.txt)  
+  ✅ [all test cases, thousands iterations](./lab-test-results/kvraft-dstest.txt)  
+  ✅ [all test cases, with race detector, hundreds iterations](./lab-test-results/kvraft-dstest-with-race-detector.txt)  
   ✅ [3A test cases, one iteration](./lab-test-results/kvraft3A.txt)  
   ✅ [3A test cases, hundreds iterations](./lab-test-results/kvraft3A-dstest.txt)  
+  ✅ [3B test cases, one iteration](./lab-test-results/kvraft3B.txt)  
+  ✅ [3B test cases, hundreds iterations](./lab-test-results/kvraft3B-dstest.txt)  
 
 - Lab4: Sharded KV
 
@@ -65,7 +69,7 @@ b6143938e1a4a0eb1f27f121acdde63c
 
 - [x] LEC 9: [Zookeeper](https://pdos.csail.mit.edu/6.824/notes/l-zookeeper.txt), [video](https://youtu.be/HYTDDLo2vSE) 
   - [x] Preparation: Read [ZooKeeper (2010)](https://pdos.csail.mit.edu/6.824/papers/zookeeper.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/zookeeper-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-zookeeper&lec=9)) 
-  - [ ] Assigned: [Lab 3: KV Raft](https://pdos.csail.mit.edu/6.824/labs/lab-kvraft.html)
+  - [x] Assigned: [Lab 3: KV Raft](https://pdos.csail.mit.edu/6.824/labs/lab-kvraft.html)
 
 - [x] LEC 10: [Chain Replication](https://pdos.csail.mit.edu/6.824/notes/l-cr.txt), [video](https://youtu.be/1uUcW-Mqg5o) 
   - [x] Preparation: Read [CR (2004)](https://pdos.csail.mit.edu/6.824/papers/cr-osdi04.pdf) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-cr&lec=10))

@@ -1430,8 +1430,8 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	lablog.Debug(rf.me, lablog.Timer, "Resetting ELT, received IS from L%d at T%d", args.LeaderId, args.Term)
 	rf.electionAlarm = nextElectionAlarm()
 
-	if args.LastIncludedIndex <= rf.LastIncludedIndex {
-		// out-of-date snapshot
+	if args.LastIncludedIndex <= rf.LastIncludedIndex || // out-of-date snapshot
+		args.LastIncludedIndex <= rf.lastApplied { // IMPORTANT: already applied more log entries than snapshot, NO need to install this snapshot, otherwise will miss some log entries in between
 		return
 	}
 
@@ -1443,8 +1443,8 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	rf.LastIncludedIndex = args.LastIncludedIndex
 	rf.LastIncludedTerm = args.LastIncludedTerm
 	// update commitIndex and lastApplied
-	rf.commitIndex = labutil.Max(rf.LastIncludedIndex, rf.commitIndex)
-	rf.lastApplied = labutil.Max(rf.LastIncludedIndex, rf.lastApplied)
+	rf.commitIndex = labutil.Max(args.LastIncludedIndex, rf.commitIndex)
+	rf.lastApplied = args.LastIncludedIndex
 
 	defer func() {
 		// save snapshot file

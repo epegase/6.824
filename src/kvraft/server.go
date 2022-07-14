@@ -129,7 +129,11 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 CheckTermAndWaitReply:
 	for !kv.killed() {
 		select {
-		case result := <-c:
+		case result, ok := <-c:
+			if !ok {
+				reply.Err = ErrShutdown
+				return
+			}
 			// get reply from applier goroutine
 			lablog.Debug(kv.me, lablog.Server, "Op %v at idx: %d get %v", op, index, result)
 			*reply = GetReply{Err: result.Err, Value: result.Value}
@@ -178,10 +182,14 @@ func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 CheckTermAndWaitReply:
 	for !kv.killed() {
 		select {
-		case result := <-c:
+		case result, ok := <-c:
+			if !ok {
+				reply.Err = ErrShutdown
+				return
+			}
 			// get reply from applier goroutine
 			lablog.Debug(kv.me, lablog.Server, "Op %v at idx: %d completed", op, index)
-			*reply = PutAppendReply{Err: result.Err}
+			reply.Err = result.Err
 			return
 		case <-time.After(rpcHandlerCheckRaftTermInterval * time.Millisecond):
 			t, _ := kv.rf.GetState()
@@ -359,7 +367,7 @@ func (kv *KVServer) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger chan<-
 	kv.mu.Lock()
 	defer kv.mu.Unlock()
 	for _, ce := range kv.commandTbl {
-		ce.replyCh <- applyResult{Err: ErrShutdown}
+		close(ce.replyCh)
 	}
 }
 

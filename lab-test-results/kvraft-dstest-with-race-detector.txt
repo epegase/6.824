@@ -1,0 +1,36 @@
+Run as `./dstest -p8 -n128 -r -pa 3A,3B --gobin /home/soros/go/bin/go1.19beta1`
+
+Running with the race detector
+Running with 8 workers / 8 CPU cores available
+Running on CPU model: Intel(R) Core(TM) i5-8259U CPU @ 2.30GHz
+Running with go version go1.19beta1 linux/amd64
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ Test                                                           ┃ Failed ┃ Total ┃         Time ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
+│ TestBasic3A                                                    │      0 │   128 │ 16.09 ± 0.22 │
+│ TestSpeed3A                                                    │      0 │   128 │ 29.04 ± 1.46 │
+│ TestConcurrent3A                                               │      0 │   128 │ 16.74 ± 0.19 │
+│ TestUnreliable3A                                               │      0 │   128 │ 17.59 ± 0.29 │
+│ TestUnreliableOneKey3A                                         │      0 │   128 │  2.00 ± 0.27 │
+│ TestOnePartition3A                                             │      0 │   128 │  4.32 ± 0.18 │
+│ TestManyPartitionsOneClient3A                                  │      0 │   128 │ 23.76 ± 0.31 │
+│ TestManyPartitionsManyClients3A                                │      0 │   128 │ 24.27 ± 0.37 │
+│ TestPersistOneClient3A                                         │      0 │   128 │ 20.11 ± 0.30 │
+│ TestPersistConcurrent3A                                        │      0 │   128 │ 21.25 ± 0.45 │
+│ TestPersistConcurrentUnreliable3A                              │      0 │   128 │ 22.38 ± 0.61 │
+│ TestPersistPartition3A                                         │      0 │   128 │ 27.71 ± 0.44 │
+│ TestPersistPartitionUnreliable3A                               │      0 │   128 │ 28.94 ± 0.65 │
+│ TestPersistPartitionUnreliableLinearizable3A                   │      0 │   128 │ 32.68 ± 1.13 │
+│ TestSnapshotRPC3B                                              │      0 │   128 │  3.75 ± 0.50 │
+│ TestSnapshotSize3B                                             │      0 │   128 │  3.73 ± 0.33 │
+│ TestSpeed3B                                                    │      0 │   128 │  4.55 ± 0.30 │
+│ TestSnapshotRecover3B                                          │      0 │   128 │ 19.26 ± 0.19 │
+│ TestSnapshotRecoverManyClients3B                               │      0 │   128 │ 19.88 ± 0.33 │
+│ TestSnapshotUnreliable3B                                       │      0 │   128 │ 16.94 ± 0.28 │
+│ TestSnapshotUnreliableRecover3B                                │      0 │   128 │ 20.65 ± 0.48 │
+│ TestSnapshotUnreliableRecoverConcurrentPartition3B             │      0 │   128 │ 27.78 ± 0.57 │
+│ TestSnapshotUnreliableRecoverConcurrentPartitionLinearizable3B │      0 │   128 │ 29.52 ± 0.70 │
+└────────────────────────────────────────────────────────────────┴────────┴───────┴──────────────┘
+
+Completed 128 iterations in total
