@@ -85,7 +85,7 @@ b6143938e1a4a0eb1f27f121acdde63c
   - [x] Preparation: Read [Spanner (2012)](https://pdos.csail.mit.edu/6.824/papers/spanner.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/spanner-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-spanner&lec=13))
 
 - [ ] LEC 14: [Optimistic Concurrency Control](https://pdos.csail.mit.edu/6.824/notes/l-farm.txt), [video](https://youtu.be/07xsfL5E8Ck), [video cont.](https://youtu.be/XwU4jKhBxws) 
-  - [ ] Preparation: Read [FaRM (2015)](https://pdos.csail.mit.edu/6.824/papers/farm-2015.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/farm-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-farm&lec=14))
+  - [x] Preparation: Read [FaRM (2015)](https://pdos.csail.mit.edu/6.824/papers/farm-2015.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/farm-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-farm&lec=14))
 
 - [ ] LEC 15: [Big Data: Spark](https://pdos.csail.mit.edu/6.824/notes/l-spark.txt), [video](https://youtu.be/qXb5rDGqFdc) 
   - [ ] Preparation: Read [Spark (2012)](https://pdos.csail.mit.edu/6.824/papers/zaharia-spark.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/spark-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-spark&lec=15))
