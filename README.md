@@ -8,11 +8,11 @@ b6143938e1a4a0eb1f27f121acdde63c
 ```
 ### Labs
 
-- Lab1: MapReduce
+- [Lab1: MapReduce](https://pdos.csail.mit.edu/6.824/labs/lab-mr.html)
 
   ✅ [result](./lab-test-results/mapreduce.txt)
 
-- Lab2: Raft
+- [Lab2: Raft](https://pdos.csail.mit.edu/6.824/labs/lab-raft.html)
 
   ✅ [all test cases, one iteration](./lab-test-results/raft.txt)  
   ✅ [all test cases, thousands iterations](./lab-test-results/raft-dstest.txt)  
@@ -26,7 +26,7 @@ b6143938e1a4a0eb1f27f121acdde63c
   ✅ [2D test cases, one iteration](./lab-test-results/raft2D.txt)  
   ✅ [2D test cases, hundreds iterations](./lab-test-results/raft2D-dstest.txt)  
 
-- Lab3: KV Raft
+- [Lab3: KV Raft](https://pdos.csail.mit.edu/6.824/labs/lab-kvraft.html)
 
   ✅ [all test cases, one iteration](./lab-test-results/kvraft.txt)  
   ✅ [all test cases, thousands iterations](./lab-test-results/kvraft-dstest.txt)  
@@ -36,20 +36,18 @@ b6143938e1a4a0eb1f27f121acdde63c
   ✅ [3B test cases, one iteration](./lab-test-results/kvraft3B.txt)  
   ✅ [3B test cases, hundreds iterations](./lab-test-results/kvraft3B-dstest.txt)  
 
-- Lab4: Sharded KV
+- [Lab4: Sharded KV](https://pdos.csail.mit.edu/6.824/labs/lab-shard.html)
 
 ### Progress
 
 - [x] LEC 1: [Introduction](https://pdos.csail.mit.edu/6.824/notes/l01.txt), [video](https://youtu.be/WtZ7pcRSkOA) 
   - [x] Preparation: Read [MapReduce (2004)](https://pdos.csail.mit.edu/6.824/papers/mapreduce.pdf) 
-  - [x] Assigned: [Lab 1: MapReduce](https://pdos.csail.mit.edu/6.824/labs/lab-mr.html)
 
 - [x] LEC 2: [RPC and Threads](https://pdos.csail.mit.edu/6.824/notes/l-rpc.txt), [crawler.go](https://pdos.csail.mit.edu/6.824/notes/crawler.go), [kv.go](https://pdos.csail.mit.edu/6.824/notes/kv.go), [vote examples](https://pdos.csail.mit.edu/6.824/notes/condvar.tar.gz), [video](https://youtu.be/oZR76REwSyA) 
   - [x] Preparation: Do [Online Go tutorial](http://tour.golang.org/) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/tour-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-gointro&lec=2))
 
 - [x] LEC 3: [GFS](https://pdos.csail.mit.edu/6.824/notes/l-gfs.txt), [video](https://youtu.be/6ETFk1-53qU) 
   - [x] Preparation: Read [GFS (2003)](https://pdos.csail.mit.edu/6.824/papers/gfs.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/gfs-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-gfs&lec=3)) 
-  - [x] Assigned: [Lab 2: Raft](https://pdos.csail.mit.edu/6.824/labs/lab-raft.html)
 
 - [x] LEC 4: [Primary-Backup Replication](https://pdos.csail.mit.edu/6.824/notes/l-vm-ft.txt), [video](https://youtu.be/gXiDmq1zDq4) 
   - [x] Preparation: Read [Fault-Tolerant Virtual Machines (2010)](https://pdos.csail.mit.edu/6.824/papers/vm-ft.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/vm-ft-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-vm-ft&lec=4))
@@ -62,14 +60,12 @@ b6143938e1a4a0eb1f27f121acdde63c
 
 - [x] LEC 7: [Fault Tolerance: Raft (2)](https://pdos.csail.mit.edu/6.824/notes/l-raft2.txt), [video](https://youtu.be/h3JiQ_lnkE8) 
   - [x] Preparation: Read [Raft (extended) (2014), Section 7 to end (but not Section 6)](https://pdos.csail.mit.edu/6.824/papers/raft-extended.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/raft2-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-raft2&lec=7)) 
-  - [x] Assigned: [Final Project](https://pdos.csail.mit.edu/6.824/project.html)
 
 - [x] LEC 8: Q&A Lab2 A+B 
   - [x] Preparation: ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-QAlab&lec=8))
 
 - [x] LEC 9: [Zookeeper](https://pdos.csail.mit.edu/6.824/notes/l-zookeeper.txt), [video](https://youtu.be/HYTDDLo2vSE) 
   - [x] Preparation: Read [ZooKeeper (2010)](https://pdos.csail.mit.edu/6.824/papers/zookeeper.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/zookeeper-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-zookeeper&lec=9)) 
-  - [x] Assigned: [Lab 3: KV Raft](https://pdos.csail.mit.edu/6.824/labs/lab-kvraft.html)
 
 - [x] LEC 10: [Chain Replication](https://pdos.csail.mit.edu/6.824/notes/l-cr.txt), [video](https://youtu.be/1uUcW-Mqg5o) 
   - [x] Preparation: Read [CR (2004)](https://pdos.csail.mit.edu/6.824/papers/cr-osdi04.pdf) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-cr&lec=10))
@@ -79,7 +75,6 @@ b6143938e1a4a0eb1f27f121acdde63c
 
 - [x] LEC 12: [Cache Consistency: Frangipani](https://pdos.csail.mit.edu/6.824/notes/l-frangipani.txt), [video](https://youtu.be/jPrUxfIcWWs) 
   - [x] Preparation: Read [Frangipani](https://pdos.csail.mit.edu/6.824/papers/thekkath-frangipani.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/frangipani-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-frangipani&lec=12)) 
-  - [ ] Assigned: [Lab 4: Sharded KV](https://pdos.csail.mit.edu/6.824/labs/lab-shard.html)
 
 - [x] LEC 13: [Spanner](https://pdos.csail.mit.edu/6.824/notes/l-spanner.txt), [video](https://youtu.be/ZulDvY429B8) 
   - [x] Preparation: Read [Spanner (2012)](https://pdos.csail.mit.edu/6.824/papers/spanner.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/spanner-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-spanner&lec=13))
