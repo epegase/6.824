@@ -85,7 +85,7 @@ b6143938e1a4a0eb1f27f121acdde63c
 - [x] LEC 15: [Big Data: Spark](https://pdos.csail.mit.edu/6.824/notes/l-spark.txt), [video](https://youtu.be/qXb5rDGqFdc) 
   - [x] Preparation: Read [Spark (2012)](https://pdos.csail.mit.edu/6.824/papers/zaharia-spark.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/spark-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-spark&lec=15))
 
-- [ ] LEC 16: [Cache Consistency: Memcached at Facebook](https://pdos.csail.mit.edu/6.824/notes/l-memcached.txt), [video](https://youtu.be/eYZg0YJtFEE) 
+- [x] LEC 16: [Cache Consistency: Memcached at Facebook](https://pdos.csail.mit.edu/6.824/notes/l-memcached.txt), [video](https://youtu.be/eYZg0YJtFEE) 
   - [x] Preparation: Read [Memcached at Facebook (2013)](https://pdos.csail.mit.edu/6.824/papers/memcache-fb.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/memcache-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-memcached&lec=16))
 
 - [ ] LEC 17: [Causal Consistency, COPS](https://pdos.csail.mit.edu/6.824/notes/l-cops.txt), [video](https://pdos.csail.mit.edu/6.824/video/17.html) 
