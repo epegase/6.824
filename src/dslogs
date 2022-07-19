@@ -34,7 +34,8 @@ TOPICS = {
     "TRCE": "#fe2626",
     "CONF": "#ffe411",
     "HART": "#810672",
-    "SRVR": '#ff7dfa',
+    "SRVR": "#ff7dfa",
+    "SCTR": "#cc9900",
 }
 # fmt: on
 

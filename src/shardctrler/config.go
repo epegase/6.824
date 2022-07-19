@@ -1,17 +1,20 @@
 package shardctrler
 
-import "6.824/labrpc"
-import "6.824/raft"
-import "testing"
-import "os"
+import (
+	"os"
+	"testing"
 
-// import "log"
-import crand "crypto/rand"
-import "math/rand"
-import "encoding/base64"
-import "sync"
-import "runtime"
-import "time"
+	"6.824/lablog"
+	"6.824/labrpc"
+	"6.824/raft"
+
+	crand "crypto/rand"
+	"encoding/base64"
+	"math/rand"
+	"runtime"
+	"sync"
+	"time"
+)
 
 func randstring(n int) string {
 	b := make([]byte, 2*n)
@@ -332,6 +335,7 @@ func (cfg *config) make_partition() ([]int, []int) {
 }
 
 func make_config(t *testing.T, n int, unreliable bool) *config {
+	lablog.Debug(-1, lablog.Config, "%d servers", n)
 	runtime.GOMAXPROCS(4)
 	cfg := &config{}
 	cfg.t = t

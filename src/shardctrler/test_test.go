@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-// import "time"
-
 func check(t *testing.T, groups []int, ck *Clerk) {
 	c := ck.Query(-1)
 	if len(c.Groups) != len(groups) {

@@ -29,6 +29,7 @@ const (
 	Client  LogTopic = "CLNT"
 	Commit  LogTopic = "CMIT"
 	Config  LogTopic = "CONF"
+	Ctrler  LogTopic = "SCTR"
 	Drop    LogTopic = "DROP"
 	Error   LogTopic = "ERRO"
 	Heart   LogTopic = "HART"
