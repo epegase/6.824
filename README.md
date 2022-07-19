@@ -38,6 +38,10 @@ b6143938e1a4a0eb1f27f121acdde63c
 
 - [Lab4: Sharded KV](https://pdos.csail.mit.edu/6.824/labs/lab-shard.html)
 
+  ✅ [4A (Shard Controller) test cases, one iteration](./lab-test-results/shard4A.txt)  
+  ✅ [4A (Shard Controller) test cases, thousands iterations](./lab-test-results/shard4A-dstest.txt)  
+  ✅ [4A (Shard Controller) test cases, with race detector, hundreds iterations](./lab-test-results/shard4A-dstest-with-race-detector.txt)  
+
 ### Progress
 
 - [x] LEC 1: [Introduction](https://pdos.csail.mit.edu/6.824/notes/l01.txt), [video](https://youtu.be/WtZ7pcRSkOA) 

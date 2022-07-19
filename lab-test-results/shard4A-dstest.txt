@@ -1,39 +1,36 @@
-Run as `./dstest -p24 -n16 -l -g2 -m256 -ff -v -ts TestBasic`
+Run as `./dstest -p24 -n128 -l -g2 -m1024 -ff -ts TestBasic,TestMulti`
 
 Running with 24 workers / 8 CPU cores available
 Running on CPU model: Intel(R) Core(TM) i5-8259U CPU @ 2.30GHz
 Running with go version go1.17.6 linux/amd64
-Running with verbosity level: 1
 
-Initial iterations: 16
+Initial iterations: 128
 ┏━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
 ┃ Test      ┃ Failed ┃ Total ┃        Time ┃
 ┡━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
-│ TestBasic │      0 │    16 │ 3.46 ± 0.52 │
-└───────────┴────────┴───────┴─────────────┘
-Increasing iterations to 32
-┏━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
-┃ Test      ┃ Failed ┃ Total ┃        Time ┃
-┡━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
-│ TestBasic │      0 │    32 │ 3.73 ± 0.68 │
-└───────────┴────────┴───────┴─────────────┘
-Increasing iterations to 64
-┏━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
-┃ Test      ┃ Failed ┃ Total ┃        Time ┃
-┡━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
-│ TestBasic │      0 │    64 │ 3.31 ± 0.66 │
-└───────────┴────────┴───────┴─────────────┘
-Increasing iterations to 128
-┏━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
-┃ Test      ┃ Failed ┃ Total ┃        Time ┃
-┡━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
-│ TestBasic │      0 │   128 │ 3.06 ± 0.60 │
+│ TestBasic │      0 │   128 │ 2.99 ± 0.52 │
+│ TestMulti │      0 │   128 │ 1.53 ± 0.33 │
 └───────────┴────────┴───────┴─────────────┘
 Increasing iterations to 256
 ┏━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
 ┃ Test      ┃ Failed ┃ Total ┃        Time ┃
 ┡━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
-│ TestBasic │      0 │   256 │ 2.96 ± 0.56 │
+│ TestBasic │      0 │   256 │ 2.90 ± 0.53 │
+│ TestMulti │      0 │   256 │ 1.48 ± 0.26 │
+└───────────┴────────┴───────┴─────────────┘
+Increasing iterations to 512
+┏━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
+┃ Test      ┃ Failed ┃ Total ┃        Time ┃
+┡━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
+│ TestBasic │      0 │   512 │ 2.90 ± 0.49 │
+│ TestMulti │      0 │   512 │ 1.49 ± 0.20 │
+└───────────┴────────┴───────┴─────────────┘
+Increasing iterations to 1024
+┏━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
+┃ Test      ┃ Failed ┃ Total ┃        Time ┃
+┡━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
+│ TestBasic │      0 │  1024 │ 2.93 ± 0.51 │
+│ TestMulti │      0 │  1024 │ 1.50 ± 0.19 │
 └───────────┴────────┴───────┴─────────────┘
 
-Completed 496 iterations in total
+Completed 1920 iterations in total

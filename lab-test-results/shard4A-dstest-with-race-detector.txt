@@ -1,0 +1,15 @@
+Run as `./dstest -p24 -n128 -r -ts TestBasic,TestMulti --gobin /home/soros/go/bin/go1.19beta1`
+
+Running with the race detector
+Running with 24 workers / 8 CPU cores available
+Running on CPU model: Intel(R) Core(TM) i5-8259U CPU @ 2.30GHz
+Running with go version go1.19beta1 linux/amd64
+
+┏━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
+┃ Test      ┃ Failed ┃ Total ┃        Time ┃
+┡━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
+│ TestBasic │      0 │   128 │ 5.36 ± 3.27 │
+│ TestMulti │      0 │   128 │ 3.50 ± 3.24 │
+└───────────┴────────┴───────┴─────────────┘
+
+Completed 128 iterations in total

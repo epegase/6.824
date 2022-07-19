@@ -199,9 +199,12 @@ type gidShardsPair struct {
 type gidShardsPairList []gidShardsPair
 
 // sort group by shard load (measured by number of shards this group holds)
-func (p gidShardsPairList) Len() int           { return len(p) }
-func (p gidShardsPairList) Less(i, j int) bool { return len(p[i].shards) < len(p[j].shards) }
-func (p gidShardsPairList) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+func (p gidShardsPairList) Len() int { return len(p) }
+func (p gidShardsPairList) Less(i, j int) bool {
+	li, lj := len(p[i].shards), len(p[j].shards)
+	return li < lj || (li == lj && p[i].gid < p[j].gid)
+}
+func (p gidShardsPairList) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
 
 // get group shard load of a config
 // `sortedGroupLoad` sorted ascend by shard load
@@ -233,9 +236,9 @@ func (cfg *Config) getGroupLoad() (groupLoad map[int][]int, sortedGroupLoad gidS
 // with two goals:
 // - divide the shards as evenly as possible among the full set of groups
 // - move as few shards as possible
-func (cfg *Config) rebalance(oldConfig *Config, joinGids map[int]bool, leaveGids map[int]bool) {
+func (cfg *Config) rebalance(oldConfig *Config, joinGids []int, leaveGids []int) {
 	groupLoad, sortedGroupLoad := oldConfig.getGroupLoad()
-	groups := len(sortedGroupLoad)
+	nOldGroups := len(sortedGroupLoad)
 
 	// copy from previous config
 	copy(cfg.Shards[:], oldConfig.Shards[:])
@@ -249,26 +252,44 @@ func (cfg *Config) rebalance(oldConfig *Config, joinGids map[int]bool, leaveGids
 	case len(leaveGids) > 0:
 		// group leaves, evenly distribute shards on these groups to other remaining groups
 		// distribute assignments start from low-load group
+		leaveGidSet := map[int]bool{}
+		for _, gid := range leaveGids {
+			leaveGidSet[gid] = true
+		}
 		i := 0
-		for gid := range leaveGids {
+		for _, gid := range leaveGids {
 			for _, shard := range groupLoad[gid] { // distribute shards of this group
-				for leaveGids[sortedGroupLoad[i%groups].gid] { // skip leaving group
+				for leaveGidSet[sortedGroupLoad[i%nOldGroups].gid] { // skip leaving group
 					i++
 				}
-				cfg.Shards[shard] = sortedGroupLoad[i%groups].gid // assign to a available group
+				cfg.Shards[shard] = sortedGroupLoad[i%nOldGroups].gid // assign to a available group
 				i++
 			}
 		}
 	case len(joinGids) > 0:
 		// new group joins, offload some shards from existing groups to these new groups
 		// offload start from high-load group
-		balancedLoad := NShards / len(cfg.Groups) // targeted balanced load
-		for gid := range joinGids {
-			for i := 0; i < balancedLoad; i++ {
+		nNewGroups := len(cfg.Groups)
+		minLoad := NShards / nNewGroups // minimum balanced load
+		nHigherLoadGroups := NShards - minLoad*nNewGroups
+		joinGroupLoad := map[int]int{}
+		// calculate load (# of shards) for each newly-joined group
+		for i, gid := range joinGids {
+			if i >= nNewGroups-nHigherLoadGroups {
+				// some groups should carry one more shard to make WHOLE cluster load-balanced
+				joinGroupLoad[gid] = minLoad + 1
+			} else {
+				joinGroupLoad[gid] = minLoad
+			}
+		}
+
+		i := 0
+		for _, gid := range joinGids {
+			for j := 0; j < joinGroupLoad[gid]; j, i = j+1, i+1 {
 				// take shards in a round-robin manner, start from high-load group
-				idx := (groups - 1 - i) % groups
+				idx := (nOldGroups - 1 - i) % nOldGroups
 				if idx < 0 {
-					idx = groups + idx
+					idx = nOldGroups + idx
 				}
 				sourceGroup := &sortedGroupLoad[idx]
 				// assign the first shard of this high-load group to a newly joined group
@@ -343,14 +364,16 @@ func (sc *ShardCtrler) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger cha
 					newConfig.Groups[k] = v
 				}
 
-				joinGids := map[int]bool{}
+				joinGids := []int{}
 				for k, v := range args.Servers {
 					// add new group
 					newConfig.Groups[k] = v
-					joinGids[k] = true
+					joinGids = append(joinGids, k)
 				}
+				// IMPORTANT: sort gids to make DETERMINISTIC shard rebalancing
+				sort.Ints(joinGids)
 				// going to rebalance shards across groups
-				newConfig.rebalance(&lastConfig, joinGids, map[int]bool{})
+				newConfig.rebalance(&lastConfig, joinGids, nil)
 				// record new config
 				sc.Configs = append(sc.Configs, newConfig)
 				r = nil
@@ -363,14 +386,12 @@ func (sc *ShardCtrler) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger cha
 					newConfig.Groups[k] = v
 				}
 
-				leaveGids := map[int]bool{}
 				for _, gid := range args.GIDs {
 					// delete leaving group
 					delete(newConfig.Groups, gid)
-					leaveGids[gid] = true
 				}
 				// going to rebalance shards across groups
-				newConfig.rebalance(&lastConfig, map[int]bool{}, leaveGids)
+				newConfig.rebalance(&lastConfig, nil, args.GIDs)
 				// record new config
 				sc.Configs = append(sc.Configs, newConfig)
 				r = nil
