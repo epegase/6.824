@@ -1,0 +1,4 @@
+Test: static shards ...
+  ... Passed
+PASS
+ok  	6.824/shardkv	2.541s

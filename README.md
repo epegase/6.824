@@ -10,7 +10,7 @@ b6143938e1a4a0eb1f27f121acdde63c
 
 - [Lab1: MapReduce](https://pdos.csail.mit.edu/6.824/labs/lab-mr.html)
 
-  ✅ [result](./lab-test-results/mapreduce.txt)
+  ✅ [test case result](./lab-test-results/mapreduce.txt)
 
 - [Lab2: Raft](https://pdos.csail.mit.edu/6.824/labs/lab-raft.html)
 

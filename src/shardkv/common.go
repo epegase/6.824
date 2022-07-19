@@ -1,5 +1,7 @@
 package shardkv
 
+import "6.824/shardctrler"
+
 //
 // Sharded key/value server.
 // Lots of replica groups, each running Raft.
@@ -9,24 +11,45 @@ package shardkv
 // You will have to modify these definitions.
 //
 
-const (
-	OK             = "OK"
-	ErrNoKey       = "ErrNoKey"
-	ErrWrongGroup  = "ErrWrongGroup"
-	ErrWrongLeader = "ErrWrongLeader"
-)
+//
+// which shard is a key in?
+// please use this function,
+// and please do not change it.
+//
+func key2shard(key string) int {
+	shard := 0
+	if len(key) > 0 {
+		shard = int(key[0])
+	}
+	shard %= shardctrler.NShards
+	return shard
+}
 
 type Err string
 
+const (
+	OK             Err = "OK"
+	ErrNoKey       Err = "ErrNoKey"
+	ErrWrongGroup  Err = "ErrWrongGroup"
+	ErrWrongLeader Err = "ErrWrongLeader"
+	ErrShutdown    Err = "ErrShutdown"
+)
+
+type opType string
+
+const (
+	opGet    opType = "G"
+	opPut    opType = "P"
+	opAppend opType = "A"
+)
+
 // Put or Append
 type PutAppendArgs struct {
-	// You'll have to add definitions here.
-	Key   string
-	Value string
-	Op    string // "Put" or "Append"
-	// You'll have to add definitions here.
-	// Field names must start with capital letters,
-	// otherwise RPC will break.
+	Key      string
+	Value    string
+	Op       opType // "Put" or "Append"
+	ClientId int64  // id of client
+	OpId     int    // client operation id
 }
 
 type PutAppendReply struct {
@@ -34,8 +57,9 @@ type PutAppendReply struct {
 }
 
 type GetArgs struct {
-	Key string
-	// You'll have to add definitions here.
+	Key      string
+	ClientId int64 // id of client
+	OpId     int   // client operation id
 }
 
 type GetReply struct {
