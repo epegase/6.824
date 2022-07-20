@@ -335,7 +335,6 @@ func (cfg *config) make_partition() ([]int, []int) {
 }
 
 func make_config(t *testing.T, n int, unreliable bool) *config {
-	lablog.Debug(-1, lablog.Config, "%d servers", n)
 	runtime.GOMAXPROCS(4)
 	cfg := &config{}
 	cfg.t = t
@@ -357,5 +356,6 @@ func make_config(t *testing.T, n int, unreliable bool) *config {
 
 	cfg.net.Reliable(!unreliable)
 
+	lablog.ShardDebug(-1, -1, lablog.Config, "%d servers of each %d group, with %d ctrlerservers", n, 0, n)
 	return cfg
 }

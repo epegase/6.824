@@ -2,6 +2,7 @@ package shardkv
 
 import (
 	"bytes"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -38,6 +39,20 @@ type Op struct {
 	ClientId int64
 	OpId     int
 }
+
+func (op Op) String() string {
+	switch op.Type {
+	case opGet:
+		return fmt.Sprintf("{G%s}", op.Key)
+	case opPut:
+		return fmt.Sprintf("{P%s}", op.Key)
+	case opAppend:
+		return fmt.Sprintf("{A%s}", op.Key)
+	default:
+		return ""
+	}
+}
+
 type applyResult struct {
 	Err   Err
 	Value string
@@ -93,7 +108,7 @@ func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) {
 		return
 	}
 
-	lablog.Debug(kv.me, lablog.Server, "Start op %v at idx: %d, from %d of client %d", op, index, op.OpId, op.ClientId)
+	lablog.ShardDebug(kv.gid, kv.me, lablog.Server, "Start %v@%d, %d/%d", op, index, op.OpId, op.ClientId%100)
 	c := make(chan applyResult) // reply channel for applier goroutine
 	kv.commandTbl[index] = commandEntry{op: op, replyCh: c}
 	kv.mu.Unlock()
@@ -107,7 +122,7 @@ CheckTermAndWaitReply:
 				return
 			}
 			// get reply from applier goroutine
-			lablog.Debug(kv.me, lablog.Server, "Op %v at idx: %d get %v", op, index, result)
+			lablog.ShardDebug(kv.gid, kv.me, lablog.Info, "Done %v@%d-> %v", op, index, result.Value[:4])
 			*reply = GetReply{Err: result.Err, Value: result.Value}
 			return
 		case <-time.After(rpcHandlerCheckRaftTermInterval * time.Millisecond):
@@ -148,7 +163,7 @@ func (kv *ShardKV) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 		return
 	}
 
-	lablog.Debug(kv.me, lablog.Server, "Start op %v at idx: %d, from %d of client %d", op, index, op.OpId, op.ClientId)
+	lablog.ShardDebug(kv.gid, kv.me, lablog.Server, "Start %v@%d, %d/%d", op, index, op.OpId, op.ClientId%100)
 	c := make(chan applyResult) // reply channel for applier goroutine
 	kv.commandTbl[index] = commandEntry{op: op, replyCh: c}
 	kv.mu.Unlock()
@@ -162,7 +177,7 @@ CheckTermAndWaitReply:
 				return
 			}
 			// get reply from applier goroutine
-			lablog.Debug(kv.me, lablog.Server, "Op %v at idx: %d completed", op, index)
+			lablog.ShardDebug(kv.gid, kv.me, lablog.Info, "Done %v@%d", op, index)
 			reply.Err = result.Err
 			return
 		case <-time.After(rpcHandlerCheckRaftTermInterval * time.Millisecond):
@@ -376,7 +391,7 @@ func (kv *ShardKV) snapshoter(persister *raft.Persister, snapshotTrigger <-chan 
 			// is approaching threshold
 			kv.mu.Lock()
 			if data := kv.kvServerSnapshot(); data == nil {
-				lablog.Debug(kv.me, lablog.Error, "Write snapshot failed")
+				lablog.ShardDebug(kv.gid, kv.me, lablog.Error, "Write snapshot failed")
 			} else {
 				// take a snapshot
 				kv.rf.Snapshot(kv.appliedCommandIndex, data)
@@ -433,7 +448,7 @@ func (kv *ShardKV) readSnapshot(data []byte) {
 	var clientTbl map[int64]applyResult
 	if d.Decode(&tbl) != nil ||
 		d.Decode(&clientTbl) != nil {
-		lablog.Debug(kv.me, lablog.Error, "Read broken snapshot")
+		lablog.ShardDebug(kv.gid, kv.me, lablog.Error, "Read broken snapshot")
 		return
 	}
 	kv.Tbl = tbl

@@ -33,7 +33,7 @@ type Op struct {
 
 type applyResult struct {
 	Err    Err
-	Result interface{}
+	Result Config
 	OpId   int
 }
 
@@ -306,7 +306,7 @@ func (cfg *Config) rebalance(oldConfig *Config, joinGids []int, leaveGids []int)
 // reply config changes back to Shard Controller's RPC handler, if any, through channel identified by commandIndex
 // after every snapshoterAppliedMsgInterval msgs, trigger a snapshot
 func (sc *ShardCtrler) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger chan<- bool, lastSnapshoterTriggeredCommandIndex int) {
-	var r interface{}
+	var r Config
 
 	for m := range applyCh {
 		if m.SnapshotValid {
@@ -356,7 +356,7 @@ func (sc *ShardCtrler) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger cha
 				}
 				r = sc.Configs[args.Num]
 			case JoinArgs:
-				lablog.Debug(sc.me, lablog.Ctrler, "Apply Join: %v", args.Servers)
+				lablog.ShardDebug(0, sc.me, lablog.Ctrler, "Apply Join: %v", args.Servers)
 				lastConfig := sc.Configs[l-1]
 				// copy from previous config
 				newConfig := Config{Num: lastConfig.Num + 1, Groups: make(map[int][]string)}
@@ -376,9 +376,9 @@ func (sc *ShardCtrler) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger cha
 				newConfig.rebalance(&lastConfig, joinGids, nil)
 				// record new config
 				sc.Configs = append(sc.Configs, newConfig)
-				r = nil
+				r = Config{Num: -1}
 			case LeaveArgs:
-				lablog.Debug(sc.me, lablog.Ctrler, "Apply Leave: %v", args.GIDs)
+				lablog.ShardDebug(0, sc.me, lablog.Ctrler, "Apply Leave: %v", args.GIDs)
 				lastConfig := sc.Configs[l-1]
 				// copy from previous config
 				newConfig := Config{Num: lastConfig.Num + 1, Groups: make(map[int][]string)}
@@ -394,9 +394,9 @@ func (sc *ShardCtrler) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger cha
 				newConfig.rebalance(&lastConfig, nil, args.GIDs)
 				// record new config
 				sc.Configs = append(sc.Configs, newConfig)
-				r = nil
+				r = Config{Num: -1}
 			case MoveArgs:
-				lablog.Debug(sc.me, lablog.Ctrler, "Apply Move: shard %v -> group %v", args.Shard, args.GID)
+				lablog.ShardDebug(0, sc.me, lablog.Ctrler, "Apply Move: shard %v -> group %v", args.Shard, args.GID)
 				lastConfig := sc.Configs[l-1]
 				// copy from previous config
 				newConfig := Config{Num: lastConfig.Num + 1, Groups: make(map[int][]string)}
@@ -408,20 +408,20 @@ func (sc *ShardCtrler) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger cha
 				newConfig.Shards[args.Shard] = args.GID
 				// record new config
 				sc.Configs = append(sc.Configs, newConfig)
-				r = nil
+				r = Config{Num: -1}
 			default:
 				panic(args)
 			}
 
-			if r == nil {
+			if r.Num < 0 {
 				// log write operation(Join/Leave/Move) result
 				latestConfig := sc.Configs[len(sc.Configs)-1]
 				_, sortedGroupLoad := latestConfig.getGroupLoad()
-				output := fmt.Sprintf("Latest Config %v / ", latestConfig.Groups)
+				output := fmt.Sprintf("%v / ", latestConfig.Groups)
 				for _, p := range sortedGroupLoad {
 					output += fmt.Sprintf("G%d:%v ", p.gid, p.shards)
 				}
-				lablog.Debug(sc.me, lablog.Ctrler, output)
+				lablog.ShardDebug(0, sc.me, lablog.Info, output)
 			}
 
 			// cache operation result
@@ -463,7 +463,7 @@ func (sc *ShardCtrler) snapshoter(persister *raft.Persister, snapshotTrigger <-c
 		if ok {
 			sc.mu.Lock()
 			if data := sc.shardCtrlerSnapshot(); data == nil {
-				lablog.Debug(sc.me, lablog.Error, "Write snapshot failed")
+				lablog.ShardDebug(0, sc.me, lablog.Error, "Write snapshot failed")
 			} else {
 				sc.rf.Snapshot(sc.appliedCommandIndex, data)
 			}
@@ -494,7 +494,7 @@ func (sc *ShardCtrler) readSnapshot(data []byte) {
 	var clientTbl map[int64]applyResult
 	if d.Decode(&configs) != nil ||
 		d.Decode(&clientTbl) != nil {
-		lablog.Debug(sc.me, lablog.Error, "Read broken snapshot")
+		lablog.ShardDebug(0, sc.me, lablog.Error, "Read broken snapshot")
 		return
 	}
 	sc.Configs = configs

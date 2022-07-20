@@ -104,7 +104,13 @@ def main(
             topic, msg = msg[0], msg[1:]
 
         if topic == 'CONF' and len(msg) >= 2 and msg[1] == 'servers':
-            n_columns = int(msg[0])
+            n_servers = int(msg[0])
+            if msg[-1] == 'ctrlerservers':
+                n_groups = int(msg[4])
+                n_ctrlers = int(msg[7])
+                n_columns = n_servers * n_groups + n_ctrlers
+            else:
+                n_columns = n_servers
 
         # To ignore some topics
         if topic not in topics:
@@ -117,19 +123,29 @@ def main(
             if duration is not None and int(time) / 10 > (start_from+duration):
                 continue
 
-        msg = " ".join(msg)
-
-        if expr is not None:
-            msg = msg.replace(expr, f"[{HIGHLIGHT}]{expr}[/{HIGHLIGHT}]")
-
         # Debug calls from the test suite aren't associated with
         # any particular peer. Otherwise we can treat second column
         # as peer id
         if topic not in NO_COLUMN_TOPICS:
-            i = int(msg[1])
+            if msg[0][0] == 'S':
+                i = int(msg[0][1:])
+            elif msg[0][0] == 'G' and msg[1][0] == 'S':
+                gid = int(msg[0][1:])
+                if n_groups > 0:
+                    gid %= n_groups
+                i = gid * n_servers + int(msg[1][1:])
+            else:
+                i = 0
+                msg = 'Invalid Format: ' + msg
+                topic = 'ERRO'
 
             if server_ids is not None and i not in server_ids_set:
                 continue
+
+        msg = " ".join(msg)
+
+        if expr is not None:
+            msg = msg.replace(expr, f"[{HIGHLIGHT}]{expr}[/{HIGHLIGHT}]")
 
         # Colorize output by using rich syntax when needed
         if colorize and topic in TOPICS:

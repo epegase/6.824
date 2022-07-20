@@ -341,7 +341,6 @@ func (cfg *config) leavem(gis []int) {
 var ncpu_once sync.Once
 
 func make_config(t *testing.T, n int, unreliable bool, maxraftstate int) *config {
-	lablog.Debug(-1, lablog.Config, "%d servers", n)
 	ncpu_once.Do(func() {
 		if runtime.NumCPU() < 2 {
 			fmt.Printf("warning: only one CPU, which may conceal locking bugs\n")
@@ -384,5 +383,6 @@ func make_config(t *testing.T, n int, unreliable bool, maxraftstate int) *config
 
 	cfg.net.Reliable(!unreliable)
 
+	lablog.ShardDebug(-1, -1, lablog.Config, "%d servers of each %d groups, with %d ctrlerservers", n, cfg.ngroups, cfg.nctrlers)
 	return cfg
 }

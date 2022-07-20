@@ -59,11 +59,7 @@ func init() {
 }
 
 func Debug(serverId int, topic LogTopic, format string, a ...interface{}) {
-	if debugVerbosity >= 1 {
-		if debugVerbosity == 1 && topic == Info {
-			return
-		}
-
+	if (debugVerbosity == 1 && topic != Info) || debugVerbosity == 2 {
 		time := time.Since(debugStart).Microseconds()
 		time /= 100
 		prefix := fmt.Sprintf("%06d %v ", time, string(topic))
@@ -72,5 +68,17 @@ func Debug(serverId int, topic LogTopic, format string, a ...interface{}) {
 		}
 		format = prefix + format
 		log.Printf(format, a...)
+	}
+}
+
+func ShardDebug(gid int, serverId int, topic LogTopic, format string, a ...interface{}) {
+	if debugVerbosity == 3 {
+		time := time.Since(debugStart).Microseconds()
+		time /= 100
+		prefix := fmt.Sprintf("%06d %v ", time, string(topic))
+		if gid >= 0 && serverId >= 0 {
+			prefix += fmt.Sprintf("G%d S%d ", gid, serverId)
+		}
+		log.Printf(prefix+format, a...)
 	}
 }
