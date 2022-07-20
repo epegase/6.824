@@ -37,11 +37,17 @@ func (ck *Clerk) Query(num int) Config {
 	}
 	ck.opId++
 	serverId := ck.leader // send to leader first
-	for {
+
+	for nNotOk := 0; nNotOk < 10; {
 		reply := &QueryReply{}
 		ok := ck.servers[serverId].Call("ShardCtrler.Query", args, reply)
 		if !ok || reply.Err == ErrWrongLeader || reply.Err == ErrShutdown {
 			serverId = (serverId + 1) % len(ck.servers)
+			if !ok {
+				nNotOk++
+			} else {
+				nNotOk = 0
+			}
 			continue
 		}
 		if reply.Err == ErrInitElection {
@@ -52,6 +58,7 @@ func (ck *Clerk) Query(num int) Config {
 		ck.leader = serverId
 		return reply.Config
 	}
+	return Config{Num: -1}
 }
 
 func (ck *Clerk) Join(servers map[int][]string) {

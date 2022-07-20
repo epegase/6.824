@@ -91,7 +91,11 @@ func (ck *Clerk) Get(key string) string {
 
 		time.Sleep(clientRefreshConfigInterval * time.Millisecond)
 		// ask controller for the latest configuration.
-		ck.config = ck.sm.Query(-1)
+		config := ck.sm.Query(-1)
+		if config.Num < 0 {
+			return ""
+		}
+		ck.config = config
 	}
 }
 
@@ -133,7 +137,11 @@ func (ck *Clerk) PutAppend(key string, value string, op opType) {
 
 		time.Sleep(clientRefreshConfigInterval * time.Millisecond)
 		// ask controller for the latest configuration.
-		ck.config = ck.sm.Query(-1)
+		config := ck.sm.Query(-1)
+		if config.Num < 0 {
+			return
+		}
+		ck.config = config
 	}
 }
 

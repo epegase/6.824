@@ -80,7 +80,9 @@ func TestStaticShards(t *testing.T) {
 			ndone += 1
 		case <-time.After(time.Second * 2):
 			done = true
-			break
+			for i := 0; i < n-ndone; i++ {
+				go func() { <-ch }()
+			}
 		}
 	}
 
