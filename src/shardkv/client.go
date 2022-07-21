@@ -66,21 +66,34 @@ func (ck *Clerk) Get(key string) string {
 	shard := key2shard(key)
 
 	for {
+		args.ConfigNum = ck.config.Num
+		sleepInterval := clientRefreshConfigInterval
+
 		gid := ck.config.Shards[shard]
 		servers := ck.config.Groups[gid]
 		serverId := ck.groupLeader[gid]
-		for range servers {
+		for i, nServer := 0, len(servers); i < nServer; {
 			srv := ck.make_end(servers[serverId])
 			reply := &GetReply{}
 			ok := srv.Call("ShardKV.Get", args, reply)
 			if !ok || reply.Err == ErrWrongLeader || reply.Err == ErrShutdown {
-				serverId = (serverId + 1) % len(servers)
+				serverId = (serverId + 1) % nServer
+				i++
+				continue
+			}
+
+			ck.groupLeader[gid] = serverId
+			if reply.Err == ErrUnknownConfig {
+				time.Sleep(50 * time.Millisecond)
 				continue
 			}
 			if reply.Err == ErrWrongGroup {
 				break
 			}
-			ck.groupLeader[gid] = serverId
+			if reply.Err == ErrOutdatedConfig {
+				sleepInterval = 0
+				break
+			}
 			if reply.Err == ErrNoKey {
 				return ""
 			}
@@ -89,7 +102,7 @@ func (ck *Clerk) Get(key string) string {
 			}
 		}
 
-		time.Sleep(clientRefreshConfigInterval * time.Millisecond)
+		time.Sleep(time.Duration(sleepInterval) * time.Millisecond)
 		// ask controller for the latest configuration.
 		config := ck.sm.Query(-1)
 		if config.Num < 0 {
@@ -115,27 +128,40 @@ func (ck *Clerk) PutAppend(key string, value string, op opType) {
 	shard := key2shard(key)
 
 	for {
+		args.ConfigNum = ck.config.Num
+		sleepInterval := clientRefreshConfigInterval
+
 		gid := ck.config.Shards[shard]
 		servers := ck.config.Groups[gid]
 		serverId := ck.groupLeader[gid]
-		for range servers {
+		for i, nServer := 0, len(servers); i < nServer; {
 			srv := ck.make_end(servers[serverId])
 			reply := &PutAppendReply{}
 			ok := srv.Call("ShardKV.PutAppend", args, reply)
 			if !ok || reply.Err == ErrWrongLeader || reply.Err == ErrShutdown {
-				serverId = (serverId + 1) % len(servers)
+				serverId = (serverId + 1) % nServer
+				i++
+				continue
+			}
+
+			ck.groupLeader[gid] = serverId
+			if reply.Err == ErrUnknownConfig {
+				time.Sleep(50 * time.Millisecond)
 				continue
 			}
 			if reply.Err == ErrWrongGroup {
 				break
 			}
-			ck.groupLeader[gid] = serverId
+			if reply.Err == ErrOutdatedConfig {
+				sleepInterval = 0
+				break
+			}
 			if reply.Err == OK {
 				return
 			}
 		}
 
-		time.Sleep(clientRefreshConfigInterval * time.Millisecond)
+		time.Sleep(time.Duration(sleepInterval) * time.Millisecond)
 		// ask controller for the latest configuration.
 		config := ck.sm.Query(-1)
 		if config.Num < 0 {

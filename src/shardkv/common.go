@@ -28,13 +28,25 @@ func key2shard(key string) int {
 type Err string
 
 const (
-	OK                Err = "OK"
-	ErrNoKey          Err = "ErrNoKey"
-	ErrWrongGroup     Err = "ErrWrongGroup"
-	ErrWrongLeader    Err = "ErrWrongLeader"
-	ErrShutdown       Err = "ErrShutdown"
-	ErrOutDatedConfig Err = "ErrOutDatedConfig"
-	ErrUnknownConfig  Err = "ErrUnknownConfig"
+	OK       Err = "OK"
+	ErrNoKey Err = "ErrNoKey"
+	// server reply when its group is not responsible for key's shard,
+	// client should update shard config and retry
+	ErrWrongGroup Err = "ErrWrongGroup"
+	// server reply when it is not the group leader,
+	// client should retry for another server in this group
+	ErrWrongLeader Err = "ErrWrongLeader"
+	// server reply when it is "dead" or going to down (Raft not functional),
+	// client should retry for another server in this group
+	ErrShutdown Err = "ErrShutdown"
+	// server reply when its shard config is newer than request's,
+	// client should update its shard config from shardctrler
+	ErrOutdatedConfig Err = "ErrOutdatedConfig"
+	// server reply when its shard config is older than request's,
+	// server will try to update its shard config from shardctrler,
+	// client should wait for a while and retry to the same server,
+	// hoping this time server's shard config is updated
+	ErrUnknownConfig Err = "ErrUnknownConfig"
 )
 
 type opType string
@@ -47,11 +59,12 @@ const (
 
 // Put or Append
 type PutAppendArgs struct {
-	Key      string
-	Value    string
-	Op       opType // "Put" or "Append"
-	ClientId int64  // id of client
-	OpId     int    // client operation id
+	Key       string
+	Value     string
+	Op        opType // "Put" or "Append"
+	ClientId  int64  // id of client
+	OpId      int    // client operation id
+	ConfigNum int    // num of client's shard config
 }
 
 type PutAppendReply struct {
@@ -59,9 +72,10 @@ type PutAppendReply struct {
 }
 
 type GetArgs struct {
-	Key      string
-	ClientId int64 // id of client
-	OpId     int   // client operation id
+	Key       string
+	ClientId  int64 // id of client
+	OpId      int   // client operation id
+	ConfigNum int   // num of client's shard config
 }
 
 type GetReply struct {
@@ -70,12 +84,12 @@ type GetReply struct {
 }
 
 type MigrateShardsArgs struct {
-	ConfigNum int
-	Gid       int
-	Shards    []int // TODO: need ?
-	Data      map[string]string
-	ClientId  int64
-	OpId      int
+	Gid       int               // client's gid
+	Shards    []int             // TODO: need ?
+	Data      map[string]string // shards' kv table
+	ClientId  int64             // id of client
+	OpId      int               // client operation id
+	ConfigNum int               // num of client's shard config
 }
 
 type MigrateShardsReply struct {

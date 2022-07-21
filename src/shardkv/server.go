@@ -78,6 +78,7 @@ type migrateOut struct {
 // for a other group, act as a FIFO queue element of migrate-out data
 type migrateEntry struct {
 	configNum int
+	leader    int
 	ch        chan migrateOut
 }
 
@@ -108,9 +109,38 @@ type ShardKV struct {
 // common logic for RPC handler, with mutex held
 // and is RESPONSIBLE for mutex release
 //
-// start Raft consensus, and wait for agreement result from applier goroutine,
-// then return with RPC reply result
-func (kv *ShardKV) commonHandler(op Op) (e Err, r string) {
+// 1. check is leader
+// 2. check request's configNum
+// 3. start Raft consensus
+// 4. wait for agreement result from applier goroutine
+// 5. return with RPC reply result
+func (kv *ShardKV) commonHandler(requestConfigNum int, op Op) (e Err, r string) {
+	_, isLeader := kv.rf.GetState()
+	if !isLeader {
+		// only leader should take responsibility to check request's configNum, then start Raft consensus
+		kv.mu.Unlock()
+		e = ErrWrongLeader
+		return
+	}
+	if kv.config.Num < requestConfigNum {
+		// my shard config seems outdated, tell configFetcher to update
+		kv.mu.Unlock()
+		select {
+		case kv.configFetcherTrigger <- true:
+		default:
+		}
+		// cannot accept request because of unknown config from future, tell client to try later
+		e = ErrUnknownConfig
+		return
+	}
+
+	if kv.config.Num > requestConfigNum {
+		// request's config is outdated, abort request, and tell client to update its shard config
+		kv.mu.Unlock()
+		e = ErrOutdatedConfig
+		return
+	}
+
 	index, term, isLeader := kv.rf.Start(op)
 	if !isLeader {
 		kv.mu.Unlock()
@@ -171,8 +201,7 @@ func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) {
 		reply.Err = ErrWrongGroup
 		return
 	}
-	// all is well, start Raft consensus
-	reply.Err, reply.Value = kv.commonHandler(Op{Payload: *args, ClientId: args.ClientId, OpId: args.OpId})
+	reply.Err, reply.Value = kv.commonHandler(args.ConfigNum, Op{Payload: *args, ClientId: args.ClientId, OpId: args.OpId})
 }
 
 // PutAppend RPC handler
@@ -188,8 +217,7 @@ func (kv *ShardKV) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 		reply.Err = ErrWrongGroup
 		return
 	}
-	// all is well, start Raft consensus
-	reply.Err, _ = kv.commonHandler(Op{Payload: *args, ClientId: args.ClientId, OpId: args.OpId})
+	reply.Err, _ = kv.commonHandler(args.ConfigNum, Op{Payload: *args, ClientId: args.ClientId, OpId: args.OpId})
 }
 
 // MigrateShards RPC handler
@@ -198,40 +226,10 @@ func (kv *ShardKV) MigrateShards(args *MigrateShardsArgs, reply *MigrateShardsRe
 		reply.Err = ErrShutdown
 		return
 	}
-	if kv.gid != args.Gid {
-		// my group is not this request's target group
-		reply.Err = ErrWrongGroup
-		return
-	}
-	_, isLeader := kv.rf.GetState()
-	if !isLeader {
-		// only leader should take responsibility to install migration
-		reply.Err = ErrWrongLeader
-		return
-	}
 
 	kv.mu.Lock()
 	lablog.ShardDebug(kv.gid, kv.me, lablog.Migrate, "My CN:%d, get mig@%d, %v", kv.config.Num, args.ConfigNum, args.Shards)
-	if kv.config.Num < args.ConfigNum {
-		// my shard config seems outdated, tell configFetcher to update
-		kv.mu.Unlock()
-		select {
-		case kv.configFetcherTrigger <- true:
-		default:
-		}
-		// cannot accept migration because of unknown config from future, tell client to try later
-		reply.Err = ErrUnknownConfig
-		return
-	}
-
-	if kv.config.Num > args.ConfigNum {
-		// migration's config is outdated, abort it, and tell client to forget it
-		kv.mu.Unlock()
-		reply.Err = ErrOutDatedConfig
-		return
-	}
-	// all is well, start Raft consensus
-	reply.Err, _ = kv.commonHandler(Op{Payload: *args, ClientId: args.ClientId, OpId: args.OpId})
+	reply.Err, _ = kv.commonHandler(args.ConfigNum, Op{Payload: *args, ClientId: args.ClientId, OpId: args.OpId})
 }
 
 // MigrateShards RPC caller, migrate shards to a group
@@ -261,26 +259,37 @@ func (kv *ShardKV) migrateShards(configNum int, gid int, shards []int, data map[
 		}
 
 		servers := kv.config.Groups[gid]
+		serverId := kv.migrateTbl[gid].leader
 		kv.mu.Unlock()
 
-		serverId := 0
-		for serverId < len(servers) { // try all servers in target group
+		for i, nServer := 0, len(servers); i < nServer && !kv.killed(); {
 			srv := kv.make_end(servers[serverId])
 			reply := &MigrateShardsReply{}
 			ok := srv.Call("ShardKV.MigrateShards", args, reply)
 			if !ok || reply.Err == ErrWrongLeader || reply.Err == ErrShutdown {
-				// try next server
-				serverId++
+				serverId = (serverId + 1) % nServer
+				i++
 				continue
 			}
+
+			kv.mu.Lock()
+			kv.migrateTbl[gid].leader = serverId
+			kv.mu.Unlock()
 			if reply.Err == ErrUnknownConfig {
 				// target server is trying to update shard config, so wait a while and retry this server
 				time.Sleep(50 * time.Millisecond)
 				continue
 			}
-			if reply.Err == OK || reply.Err == ErrOutDatedConfig || reply.Err == ErrWrongGroup {
-				// migration done, or be told to abort
-				return
+			if reply.Err == ErrOutdatedConfig {
+				select {
+				case kv.configFetcherTrigger <- true:
+				default:
+				}
+				time.Sleep(50 * time.Millisecond)
+				continue
+			}
+			if reply.Err == OK {
+				return // migration done
 			}
 		}
 
@@ -561,7 +570,7 @@ func (kv *ShardKV) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger chan<- 
 					// but when this request reach applier at this point,
 					// my group's shard config has been updated,
 					// and so the request's migration is outdated, reply the same error
-					r, e = "", ErrOutDatedConfig
+					r, e = "", ErrOutdatedConfig
 				} else {
 					// migration request accepted, install shards' data from this migration
 					kv.installMigration(payload.Data)
