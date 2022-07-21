@@ -44,7 +44,7 @@ func (ck *Clerk) Query(num int) Config {
 		if !ok || reply.Err == ErrWrongLeader || reply.Err == ErrShutdown {
 			serverId = (serverId + 1) % len(ck.servers)
 			if !ok {
-				nNotOk++
+				nNotOk++ // shardctrler maybe down, retry some times, but DEFINITELY not keep trying
 			} else {
 				nNotOk = 0
 			}
@@ -58,7 +58,8 @@ func (ck *Clerk) Query(num int) Config {
 		ck.leader = serverId
 		return reply.Config
 	}
-	return Config{Num: -1}
+
+	return Config{Num: -1} // client tried its best, but shardctrler not respond
 }
 
 func (ck *Clerk) Join(servers map[int][]string) {

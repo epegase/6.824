@@ -363,6 +363,7 @@ func make_config(t *testing.T, n int, unreliable bool, maxraftstate int) *config
 	cfg.mck = cfg.shardclerk()
 
 	cfg.ngroups = 3
+	lablog.ShardDebug(-1, -1, lablog.Config, "%d servers of each %d groups, with %d ctrlerservers", n, cfg.ngroups, cfg.nctrlers)
 	cfg.groups = make([]*group, cfg.ngroups)
 	cfg.n = n
 	for gi := 0; gi < cfg.ngroups; gi++ {
@@ -383,6 +384,5 @@ func make_config(t *testing.T, n int, unreliable bool, maxraftstate int) *config
 
 	cfg.net.Reliable(!unreliable)
 
-	lablog.ShardDebug(-1, -1, lablog.Config, "%d servers of each %d groups, with %d ctrlerservers", n, cfg.ngroups, cfg.nctrlers)
 	return cfg
 }

@@ -37,6 +37,7 @@ const (
 	Leader  LogTopic = "LEAD"
 	Log     LogTopic = "LOG1"
 	Log2    LogTopic = "LOG2"
+	Migrate LogTopic = "MIGR"
 	Persist LogTopic = "PERS"
 	Snap    LogTopic = "SNAP"
 	Server  LogTopic = "SRVR"

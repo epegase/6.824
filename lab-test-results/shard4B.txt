@@ -1,4 +1,6 @@
 Test: static shards ...
   ... Passed
+Test: join then leave ...
+  ... Passed
 PASS
-ok  	6.824/shardkv	2.541s
+ok  	6.824/shardkv	4.286s

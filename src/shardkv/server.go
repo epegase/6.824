@@ -10,6 +10,7 @@ import (
 	"6.824/labgob"
 	"6.824/lablog"
 	"6.824/labrpc"
+	"6.824/labutil"
 	"6.824/raft"
 	"6.824/shardctrler"
 )
@@ -31,167 +32,343 @@ const (
 )
 
 type Op struct {
-	Type  opType
-	Key   string
-	Value string
-
+	Payload interface{}
 	// for duplicated op detection
 	ClientId int64
 	OpId     int
 }
 
 func (op Op) String() string {
-	switch op.Type {
-	case opGet:
-		return fmt.Sprintf("{G%s}", op.Key)
-	case opPut:
-		return fmt.Sprintf("{P%s}", op.Key)
-	case opAppend:
-		return fmt.Sprintf("{A%s}", op.Key)
+	switch payload := op.Payload.(type) {
+	case GetArgs:
+		return fmt.Sprintf("{G%s}", payload.Key)
+	case PutAppendArgs:
+		if payload.Op == opPut {
+			return fmt.Sprintf("{P%s}", payload.Key)
+		}
+		return fmt.Sprintf("{A%s}", payload.Key)
+	case MigrateShardsArgs:
+		return fmt.Sprintf("{M%d}", payload.ConfigNum)
 	default:
 		return ""
 	}
 }
 
+// channel message from applier to RPC handler,
+// and as cached operation result, to respond to duplicated operation
 type applyResult struct {
 	Err   Err
 	Value string
 	OpId  int
 }
+
+// reply channel from applier to RPC handler, of a commandIndex
 type commandEntry struct {
 	op      Op
 	replyCh chan applyResult
 }
 
-type ShardKV struct {
-	mu           sync.Mutex
-	me           int
-	rf           *raft.Raft
-	sm           *shardctrler.Clerk // shard manager
-	dead         int32              // set by Kill()
-	make_end     func(string) *labrpc.ClientEnd
-	gid          int
-	maxraftstate float64 // snapshot if log grows this big
+// when reconfigure, migrate-out data from my group to other group
+type migrateOut struct {
+	configNum  int
+	shards     []int
+	mergedData map[string]string
+}
 
-	// Your definitions here.
-	commandTbl          map[int]commandEntry // map from commandIndex to commandEntry, maintained by leader, initialized to empty when restart
-	appliedCommandIndex int                  // last applied commandIndex from applyCh
-	config              shardctrler.Config   // latest known shard config
+// for a other group, act as a FIFO queue element of migrate-out data
+type migrateEntry struct {
+	configNum int
+	ch        chan migrateOut
+}
+
+type ShardKV struct {
+	mu                   sync.Mutex
+	me                   int
+	rf                   *raft.Raft
+	sm                   *shardctrler.Clerk // shard manager
+	dead                 int32              // set by Kill()
+	make_end             func(string) *labrpc.ClientEnd
+	gid                  int       // my group id
+	maxraftstate         float64   // snapshot if log grows this big
+	configFetcherTrigger chan bool // trigger configFetcher to update shard config
+	quit                 chan bool // signal to quit
+
+	commandTbl          map[int]commandEntry  // map from commandIndex to commandEntry, maintained by leader, initialized to empty when restart
+	appliedCommandIndex int                   // last applied commandIndex from applyCh
+	config              shardctrler.Config    // latest known shard config
+	migrateTbl          map[int]*migrateEntry // for each other group, map of gid -> migrate-out data
 
 	// need to persist between restart
 	Tbl       map[string]string     // key-value table
 	ClientTbl map[int64]applyResult // map from clientId to last RPC operation result (for duplicated operation detection)
+	ClientId  int64                 // when migrate shards data to other group, act as a ShardKV client, so need a ClientId
+	OpId      int                   // also for duplicated migration detection, need an OpId
 }
 
+// common logic for RPC handler, with mutex held
+// and is RESPONSIBLE for mutex release
+//
+// start Raft consensus, and wait for agreement result from applier goroutine,
+// then return with RPC reply result
+func (kv *ShardKV) commonHandler(op Op) (e Err, r string) {
+	index, term, isLeader := kv.rf.Start(op)
+	if !isLeader {
+		kv.mu.Unlock()
+		e = ErrWrongLeader
+		return
+	}
+
+	lablog.ShardDebug(kv.gid, kv.me, lablog.Server, "Start %v@%d, %d/%d", op, index, op.OpId, op.ClientId%100)
+	c := make(chan applyResult) // reply channel for applier goroutine
+	kv.commandTbl[index] = commandEntry{op: op, replyCh: c}
+	kv.mu.Unlock()
+
+CheckTermAndWaitReply:
+	for !kv.killed() {
+		select {
+		case result, ok := <-c:
+			if !ok {
+				e = ErrShutdown
+				return
+			}
+			// get reply from applier goroutine
+			if l := len(result.Value); l > 0 {
+				lablog.ShardDebug(kv.gid, kv.me, lablog.Info, "Done %v@%d-> %v", op, index, result.Value[:labutil.Min(4, l)])
+			} else {
+				lablog.ShardDebug(kv.gid, kv.me, lablog.Info, "Done %v@%d", op, index)
+			}
+			e = result.Err
+			r = result.Value
+			return
+		case <-time.After(rpcHandlerCheckRaftTermInterval * time.Millisecond):
+			t, _ := kv.rf.GetState()
+			if term != t {
+				e = ErrWrongLeader
+				break CheckTermAndWaitReply
+			}
+		}
+	}
+
+	go func() { <-c }() // avoid applier from blocking, and avoid resource leak
+	if kv.killed() {
+		e = ErrShutdown
+	}
+	return
+}
+
+// Get RPC handler
 func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) {
-	// Your code here.
 	if kv.killed() {
 		reply.Err = ErrShutdown
 		return
 	}
-
-	op := Op{Type: opGet, Key: args.Key, ClientId: args.ClientId, OpId: args.OpId}
 	// IMPORTANT: lock before rf.Start,
 	// to avoid raft finish too quick before kv.commandTbl has set replyCh for this commandIndex
 	kv.mu.Lock()
-
 	if kv.config.Num == 0 || kv.config.Shards[key2shard(args.Key)] != kv.gid {
+		// no config fetched, or is not responsible for key's shard
 		kv.mu.Unlock()
 		reply.Err = ErrWrongGroup
 		return
 	}
+	// all is well, start Raft consensus
+	reply.Err, reply.Value = kv.commonHandler(Op{Payload: *args, ClientId: args.ClientId, OpId: args.OpId})
+}
 
-	index, term, isLeader := kv.rf.Start(op)
-	if !isLeader {
+// PutAppend RPC handler
+func (kv *ShardKV) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
+	if kv.killed() {
+		reply.Err = ErrShutdown
+		return
+	}
+	kv.mu.Lock()
+	if kv.config.Num == 0 || kv.config.Shards[key2shard(args.Key)] != kv.gid {
+		// no config fetched, or is not responsible for key's shard
 		kv.mu.Unlock()
+		reply.Err = ErrWrongGroup
+		return
+	}
+	// all is well, start Raft consensus
+	reply.Err, _ = kv.commonHandler(Op{Payload: *args, ClientId: args.ClientId, OpId: args.OpId})
+}
+
+// MigrateShards RPC handler
+func (kv *ShardKV) MigrateShards(args *MigrateShardsArgs, reply *MigrateShardsReply) {
+	if kv.killed() {
+		reply.Err = ErrShutdown
+		return
+	}
+	if kv.gid != args.Gid {
+		// my group is not this request's target group
+		reply.Err = ErrWrongGroup
+		return
+	}
+	_, isLeader := kv.rf.GetState()
+	if !isLeader {
+		// only leader should take responsibility to install migration
 		reply.Err = ErrWrongLeader
 		return
 	}
 
-	lablog.ShardDebug(kv.gid, kv.me, lablog.Server, "Start %v@%d, %d/%d", op, index, op.OpId, op.ClientId%100)
-	c := make(chan applyResult) // reply channel for applier goroutine
-	kv.commandTbl[index] = commandEntry{op: op, replyCh: c}
-	kv.mu.Unlock()
-
-CheckTermAndWaitReply:
-	for !kv.killed() {
+	kv.mu.Lock()
+	lablog.ShardDebug(kv.gid, kv.me, lablog.Migrate, "My CN:%d, get mig@%d, %v", kv.config.Num, args.ConfigNum, args.Shards)
+	if kv.config.Num < args.ConfigNum {
+		// my shard config seems outdated, tell configFetcher to update
+		kv.mu.Unlock()
 		select {
-		case result, ok := <-c:
-			if !ok {
-				reply.Err = ErrShutdown
-				return
-			}
-			// get reply from applier goroutine
-			lablog.ShardDebug(kv.gid, kv.me, lablog.Info, "Done %v@%d-> %v", op, index, result.Value[:4])
-			*reply = GetReply{Err: result.Err, Value: result.Value}
-			return
-		case <-time.After(rpcHandlerCheckRaftTermInterval * time.Millisecond):
-			t, _ := kv.rf.GetState()
-			if term != t {
-				reply.Err = ErrWrongLeader
-				break CheckTermAndWaitReply
-			}
+		case kv.configFetcherTrigger <- true:
+		default:
 		}
+		// cannot accept migration because of unknown config from future, tell client to try later
+		reply.Err = ErrUnknownConfig
+		return
 	}
 
-	go func() { <-c }() // avoid applier from blocking, and avoid resource leak
-	if kv.killed() {
-		reply.Err = ErrShutdown
+	if kv.config.Num > args.ConfigNum {
+		// migration's config is outdated, abort it, and tell client to forget it
+		kv.mu.Unlock()
+		reply.Err = ErrOutDatedConfig
+		return
+	}
+	// all is well, start Raft consensus
+	reply.Err, _ = kv.commonHandler(Op{Payload: *args, ClientId: args.ClientId, OpId: args.OpId})
+}
+
+// MigrateShards RPC caller, migrate shards to a group
+func (kv *ShardKV) migrateShards(configNum int, gid int, shards []int, data map[string]string) {
+	kv.mu.Lock()
+	args := &MigrateShardsArgs{
+		ConfigNum: configNum,
+		Gid:       gid,
+		Shards:    shards,
+		Data:      data,
+		ClientId:  kv.ClientId,
+		OpId:      kv.OpId, // opId is fixed for this migration
+	}
+	kv.OpId++
+	kv.mu.Unlock()
+
+	for !kv.killed() {
+		_, isLeader := kv.rf.GetState()
+		if !isLeader {
+			// not leader any more, abort
+			return
+		}
+		kv.mu.Lock()
+		if configNum != kv.config.Num {
+			// this migration's config is outdated, abort
+			return
+		}
+
+		servers := kv.config.Groups[gid]
+		kv.mu.Unlock()
+
+		serverId := 0
+		for serverId < len(servers) { // try all servers in target group
+			srv := kv.make_end(servers[serverId])
+			reply := &MigrateShardsReply{}
+			ok := srv.Call("ShardKV.MigrateShards", args, reply)
+			if !ok || reply.Err == ErrWrongLeader || reply.Err == ErrShutdown {
+				// try next server
+				serverId++
+				continue
+			}
+			if reply.Err == ErrUnknownConfig {
+				// target server is trying to update shard config, so wait a while and retry this server
+				time.Sleep(50 * time.Millisecond)
+				continue
+			}
+			if reply.Err == OK || reply.Err == ErrOutDatedConfig || reply.Err == ErrWrongGroup {
+				// migration done, or be told to abort
+				return
+			}
+		}
+
+		// migration not done in this turn, wait a while and retry this group
+		time.Sleep(50 * time.Millisecond)
 	}
 }
 
-func (kv *ShardKV) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
-	// Your code here.
-	if kv.killed() {
-		reply.Err = ErrShutdown
-		return
-	}
-
-	op := Op{Type: args.Op, Key: args.Key, Value: args.Value, ClientId: args.ClientId, OpId: args.OpId}
-	kv.mu.Lock()
-
-	if kv.config.Num == 0 || kv.config.Shards[key2shard(args.Key)] != kv.gid {
-		kv.mu.Unlock()
-		reply.Err = ErrWrongGroup
-		return
-	}
-
-	index, term, isLeader := kv.rf.Start(op)
-	if !isLeader {
-		kv.mu.Unlock()
-		reply.Err = ErrWrongLeader
-		return
-	}
-
-	lablog.ShardDebug(kv.gid, kv.me, lablog.Server, "Start %v@%d, %d/%d", op, index, op.OpId, op.ClientId%100)
-	c := make(chan applyResult) // reply channel for applier goroutine
-	kv.commandTbl[index] = commandEntry{op: op, replyCh: c}
-	kv.mu.Unlock()
-
-CheckTermAndWaitReply:
+// The shardsMigrator go routine act as a long-run goroutine to migrate shards for ONE group,
+// it is created when my group try to migrate shards to this group at first time,
+// and take migrateOut in FIFO manner through channel for this group
+func (kv *ShardKV) shardsMigrator(gid int, ch <-chan migrateOut) {
 	for !kv.killed() {
-		select {
-		case result, ok := <-c:
+		// new migrateOut need to send to group of gid
+		out := <-ch
+
+		kv.mu.Lock()
+		if out.configNum != kv.config.Num {
+			// this to-send migrateOut's config is outdated, abort it
+			kv.mu.Unlock()
+			continue
+		}
+		kv.mu.Unlock()
+
+		lablog.ShardDebug(kv.gid, kv.me, lablog.Migrate, "Start mig->G%d@%d, %v", gid, out.configNum, out.shards)
+		// start migrate shards to group of gid
+		kv.migrateShards(out.configNum, gid, out.shards, out.mergedData)
+	}
+}
+
+// when reconfigure, compare oldConfig and newConfig,
+// get shards data of each group that needs to migrate out from my group
+func (kv *ShardKV) buildMigrateOut(oldConfig shardctrler.Config, newConfig shardctrler.Config) (byGroup map[int]*migrateOut) {
+	byGroup = make(map[int]*migrateOut)
+	for shard, oldGid := range oldConfig.Shards {
+		if newGid := newConfig.Shards[shard]; oldGid == kv.gid && newGid != kv.gid {
+			// shard in my group of oldConfig, but not in my group of newConfig,
+			// so need to migrate out
+			out, ok := byGroup[newGid]
 			if !ok {
-				reply.Err = ErrShutdown
-				return
+				out = &migrateOut{configNum: newConfig.Num, shards: make([]int, 0), mergedData: make(map[string]string)}
+				byGroup[newGid] = out
 			}
-			// get reply from applier goroutine
-			lablog.ShardDebug(kv.gid, kv.me, lablog.Info, "Done %v@%d", op, index)
-			reply.Err = result.Err
-			return
-		case <-time.After(rpcHandlerCheckRaftTermInterval * time.Millisecond):
-			t, _ := kv.rf.GetState()
-			if term != t {
-				reply.Err = ErrWrongLeader
-				break CheckTermAndWaitReply
+
+			// build migration data for target group
+			out.shards = append(out.shards, shard)
+			for k, v := range kv.Tbl {
+				if key2shard(k) == shard {
+					out.mergedData[k] = v
+				}
 			}
 		}
 	}
+	return
+}
 
-	go func() { <-c }() // avoid applier from blocking, and avoid resource leak
-	if kv.killed() {
-		reply.Err = ErrShutdown
+// when reconfigure, after buildMigrateOut,
+// for each target group, trigger shards migration process,
+// by sending migrateOut to the group's shardsMigrator goroutine
+func (kv *ShardKV) triggerMigrateShards(gid int, out migrateOut) {
+	kv.mu.Lock()
+	entry, ok := kv.migrateTbl[gid]
+	switch {
+	case !ok:
+		entry = &migrateEntry{configNum: out.configNum, ch: make(chan migrateOut, 1)}
+		kv.migrateTbl[gid] = entry
+		// kick-off this group's shardsMigrator
+		go kv.shardsMigrator(gid, entry.ch)
+	case out.configNum > entry.configNum:
+		entry.configNum = out.configNum
+	default:
+		// out.configNum <= entry.configNum:
+		// migrateOut's config is outdated, don't send this migrateOut
+		kv.mu.Unlock()
+		return
+	}
+	kv.mu.Unlock()
+
+	select {
+	case entry.ch <- out:
+	case <-kv.quit:
+	}
+}
+
+// install migration's shards data into my kv table
+func (kv *ShardKV) installMigration(data map[string]string) {
+	for k, v := range data {
+		kv.Tbl[k] = v
 	}
 }
 
@@ -204,7 +381,7 @@ CheckTermAndWaitReply:
 func (kv *ShardKV) Kill() {
 	atomic.StoreInt32(&kv.dead, 1)
 	kv.rf.Kill()
-	// Your code here, if desired.
+	close(kv.quit)
 }
 
 func (kv *ShardKV) killed() bool {
@@ -252,6 +429,10 @@ func StartServer(
 	// call labgob.Register on structures you want
 	// Go's RPC library to marshall/unmarshall.
 	labgob.Register(Op{})
+	labgob.Register(GetArgs{})
+	labgob.Register(PutAppendArgs{})
+	labgob.Register(shardctrler.Config{})
+	labgob.Register(MigrateShardsArgs{})
 
 	kv := new(ShardKV)
 	kv.me = me
@@ -261,11 +442,16 @@ func StartServer(
 	applyCh := make(chan raft.ApplyMsg)
 	kv.rf = raft.Make(servers, me, persister, applyCh)
 	kv.sm = shardctrler.MakeClerk(ctrlers)
+	kv.configFetcherTrigger = make(chan bool, 1)
+	kv.quit = make(chan bool)
 
 	kv.appliedCommandIndex = kv.rf.LastIncludedIndex
 	kv.commandTbl = make(map[int]commandEntry)
+	kv.migrateTbl = make(map[int]*migrateEntry)
 	kv.Tbl = make(map[string]string)
 	kv.ClientTbl = make(map[int64]applyResult)
+	kv.ClientId = labutil.Nrand()
+	kv.OpId = 1
 
 	// initialize from snapshot persisted before a crash
 	kv.readSnapshot(persister.ReadSnapshot())
@@ -276,9 +462,10 @@ func StartServer(
 
 	go kv.applier(applyCh, snapshotTrigger, kv.appliedCommandIndex)
 
-	go kv.snapshoter(persister, snapshotTrigger)
+	kv.configFetcherTrigger <- true // trigger very first time config fetch
+	go kv.configFetcher(kv.configFetcherTrigger)
 
-	go kv.configFetcher()
+	go kv.snapshoter(persister, snapshotTrigger)
 
 	return kv
 }
@@ -289,6 +476,7 @@ func StartServer(
 // after every snapshoterAppliedMsgInterval msgs, trigger a snapshot
 func (kv *ShardKV) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger chan<- bool, lastSnapshoterTriggeredCommandIndex int) {
 	var r string
+	var e Err
 
 	for m := range applyCh {
 		if m.SnapshotValid {
@@ -323,26 +511,66 @@ func (kv *ShardKV) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger chan<- 
 
 		kv.appliedCommandIndex = m.CommandIndex
 
-		lastOpResult := kv.ClientTbl[op.ClientId]
+		if op.ClientId == 0 && op.OpId == 0 {
+			// internal Raft consensus command, for
+			// - shard config agreement
+			switch payload := op.Payload.(type) {
+			case shardctrler.Config:
+				if payload.Num <= kv.config.Num {
+					// outdated config, ignore it
+					break
+				}
+				oldConfig := kv.config
+				// update my group's shard config
+				// it's the ONLY place where shard config can be updated
+				kv.config = payload
 
+				_, isLeader := kv.rf.GetState()
+				if isLeader && oldConfig.Num > 0 {
+					// only leader, and not the initial config update,
+					// should my group try to migrate any shards data out
+					for gid, out := range kv.buildMigrateOut(oldConfig, payload) {
+						go kv.triggerMigrateShards(gid, *out)
+					}
+				}
+			}
+
+			kv.mu.Unlock()
+			continue
+		}
+
+		lastOpResult := kv.ClientTbl[op.ClientId]
 		if lastOpResult.OpId >= op.OpId {
 			// detect duplicated operation
 			// reply with cached result, don't update kv table
-			r = lastOpResult.Value
+			r, e = lastOpResult.Value, lastOpResult.Err
 		} else {
-			switch op.Type {
-			case opGet:
-				r = kv.Tbl[op.Key]
-			case opPut:
-				kv.Tbl[op.Key] = op.Value
-				r = ""
-			case opAppend:
-				kv.Tbl[op.Key] = kv.Tbl[op.Key] + op.Value
-				r = ""
+			switch payload := op.Payload.(type) {
+			case GetArgs:
+				r, e = kv.Tbl[payload.Key], OK
+			case PutAppendArgs:
+				if payload.Op == opPut {
+					kv.Tbl[payload.Key] = payload.Value
+				} else {
+					kv.Tbl[payload.Key] += payload.Value
+				}
+				r, e = "", OK
+			case MigrateShardsArgs:
+				if kv.config.Num > payload.ConfigNum {
+					// other group start migrate shards to my group,
+					// but when this request reach applier at this point,
+					// my group's shard config has been updated,
+					// and so the request's migration is outdated, reply the same error
+					r, e = "", ErrOutDatedConfig
+				} else {
+					// migration request accepted, install shards' data from this migration
+					kv.installMigration(payload.Data)
+					r, e = "", OK
+				}
 			}
 
 			// cache operation result
-			kv.ClientTbl[op.ClientId] = applyResult{Value: r, OpId: op.OpId}
+			kv.ClientTbl[op.ClientId] = applyResult{Err: e, Value: r, OpId: op.OpId}
 		}
 
 		ce, ok := kv.commandTbl[m.CommandIndex]
@@ -363,7 +591,7 @@ func (kv *ShardKV) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger chan<- 
 				// by noticing that a different request has appeared at the index returned by Start()
 				ce.replyCh <- applyResult{Err: ErrWrongLeader}
 			} else {
-				ce.replyCh <- applyResult{Err: OK, Value: r}
+				ce.replyCh <- applyResult{Err: e, Value: r}
 			}
 		}
 	}
@@ -373,6 +601,39 @@ func (kv *ShardKV) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger chan<- 
 	defer kv.mu.Unlock()
 	for _, ce := range kv.commandTbl {
 		close(ce.replyCh)
+	}
+}
+
+// The configFetcher go routine periodically poll the shardctrler,
+// to learn about new configurations
+func (kv *ShardKV) configFetcher(trigger <-chan bool) {
+	for !kv.killed() {
+		// get triggered by immediate fetch request,
+		// or fetch periodically
+		select {
+		case _, ok := <-trigger:
+			if !ok {
+				return
+			}
+		case <-time.After(serverRefreshConfigInterval * time.Millisecond):
+		}
+
+		_, isLeader := kv.rf.GetState()
+		if !isLeader {
+			// only leader should update shard config
+			continue
+		}
+
+		config := kv.sm.Query(-1)
+		if config.Num >= 0 { // config.Num maybe < 0 when shardctrler not respond for a while
+			kv.mu.Lock()
+			if config.Num > kv.config.Num {
+				// fetch newer config, start Raft consensus to reach agreement and tell all followers
+				lablog.ShardDebug(kv.gid, kv.me, lablog.Ctrler, "To update config %d>%d", config.Num, kv.config.Num)
+				kv.rf.Start(Op{Payload: config})
+			}
+			kv.mu.Unlock()
+		}
 	}
 }
 
@@ -410,28 +671,14 @@ func (kv *ShardKV) snapshoter(persister *raft.Persister, snapshotTrigger <-chan 
 	}
 }
 
-// The configFetcher go routine periodically poll the shardctrler,
-// to learn about new configurations
-func (kv *ShardKV) configFetcher() {
-	for !kv.killed() {
-		config := kv.sm.Query(-1)
-
-		kv.mu.Lock()
-		if config.Num > kv.config.Num {
-			kv.config = config
-		}
-		kv.mu.Unlock()
-
-		time.Sleep(serverRefreshConfigInterval * time.Millisecond)
-	}
-}
-
 // get KVServer instance state to be snapshotted, with mutex held
 func (kv *ShardKV) kvServerSnapshot() []byte {
 	w := new(bytes.Buffer)
 	e := labgob.NewEncoder(w)
 	if e.Encode(kv.Tbl) != nil ||
-		e.Encode(kv.ClientTbl) != nil {
+		e.Encode(kv.ClientTbl) != nil ||
+		e.Encode(kv.ClientId) != nil ||
+		e.Encode(kv.OpId) != nil {
 		return nil
 	}
 	return w.Bytes()
@@ -446,8 +693,12 @@ func (kv *ShardKV) readSnapshot(data []byte) {
 	d := labgob.NewDecoder(r)
 	var tbl map[string]string
 	var clientTbl map[int64]applyResult
+	var clientId int64
+	var opId int
 	if d.Decode(&tbl) != nil ||
-		d.Decode(&clientTbl) != nil {
+		d.Decode(&clientTbl) != nil ||
+		d.Decode(&clientId) != nil ||
+		d.Decode(&opId) != nil {
 		lablog.ShardDebug(kv.gid, kv.me, lablog.Error, "Read broken snapshot")
 		return
 	}

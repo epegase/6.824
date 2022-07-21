@@ -58,7 +58,7 @@ type ShardCtrler struct {
 
 // common logic for Query/Join/Leave/Move RPC handler
 // very same logic as kvraft server RPC handler (see ../kvraft/server.go)
-func (sc *ShardCtrler) commonHandler(op Op) (e Err, r interface{}) {
+func (sc *ShardCtrler) commonHandler(op Op) (e Err, r Config) {
 	if sc.killed() {
 		e = ErrShutdown
 		return
@@ -108,26 +108,19 @@ CheckTermAndWaitReply:
 }
 
 func (sc *ShardCtrler) Join(args *JoinArgs, reply *JoinReply) {
-	e, _ := sc.commonHandler(Op{Args: *args, ClientId: args.ClientId, OpId: args.OpId})
-	reply.Err = e
+	reply.Err, _ = sc.commonHandler(Op{Args: *args, ClientId: args.ClientId, OpId: args.OpId})
 }
 
 func (sc *ShardCtrler) Leave(args *LeaveArgs, reply *LeaveReply) {
-	e, _ := sc.commonHandler(Op{Args: *args, ClientId: args.ClientId, OpId: args.OpId})
-	reply.Err = e
+	reply.Err, _ = sc.commonHandler(Op{Args: *args, ClientId: args.ClientId, OpId: args.OpId})
 }
 
 func (sc *ShardCtrler) Move(args *MoveArgs, reply *MoveReply) {
-	e, _ := sc.commonHandler(Op{Args: *args, ClientId: args.ClientId, OpId: args.OpId})
-	reply.Err = e
+	reply.Err, _ = sc.commonHandler(Op{Args: *args, ClientId: args.ClientId, OpId: args.OpId})
 }
 
 func (sc *ShardCtrler) Query(args *QueryArgs, reply *QueryReply) {
-	e, r := sc.commonHandler(Op{Args: *args, ClientId: args.ClientId, OpId: args.OpId})
-	reply.Err = e
-	if e == OK {
-		reply.Config = r.(Config)
-	}
+	reply.Err, reply.Config = sc.commonHandler(Op{Args: *args, ClientId: args.ClientId, OpId: args.OpId})
 }
 
 //
@@ -417,7 +410,7 @@ func (sc *ShardCtrler) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger cha
 				// log write operation(Join/Leave/Move) result
 				latestConfig := sc.Configs[len(sc.Configs)-1]
 				_, sortedGroupLoad := latestConfig.getGroupLoad()
-				output := fmt.Sprintf("%v / ", latestConfig.Groups)
+				output := fmt.Sprintf("%d %v / ", latestConfig.Num, latestConfig.Groups)
 				for _, p := range sortedGroupLoad {
 					output += fmt.Sprintf("G%d:%v ", p.gid, p.shards)
 				}

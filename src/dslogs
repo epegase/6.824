@@ -36,6 +36,7 @@ TOPICS = {
     "HART": "#810672",
     "SRVR": "#ff7dfa",
     "SCTR": "#cc9900",
+    "MIGR": "#5689ff",
 }
 # fmt: on
 
@@ -131,9 +132,13 @@ def main(
                 i = int(msg[0][1:])
             elif msg[0][0] == 'G' and msg[1][0] == 'S':
                 gid = int(msg[0][1:])
-                if n_groups > 0:
-                    gid %= n_groups
-                i = gid * n_servers + int(msg[1][1:])
+                server_id = int(msg[1][1:])
+                if gid == 0:
+                    i = server_id
+                else:
+                    if n_groups > 0:
+                        gid %= n_groups
+                    i = gid * n_servers + server_id + n_ctrlers
             else:
                 i = 0
                 msg = 'Invalid Format: ' + msg

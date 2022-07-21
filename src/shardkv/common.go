@@ -28,11 +28,13 @@ func key2shard(key string) int {
 type Err string
 
 const (
-	OK             Err = "OK"
-	ErrNoKey       Err = "ErrNoKey"
-	ErrWrongGroup  Err = "ErrWrongGroup"
-	ErrWrongLeader Err = "ErrWrongLeader"
-	ErrShutdown    Err = "ErrShutdown"
+	OK                Err = "OK"
+	ErrNoKey          Err = "ErrNoKey"
+	ErrWrongGroup     Err = "ErrWrongGroup"
+	ErrWrongLeader    Err = "ErrWrongLeader"
+	ErrShutdown       Err = "ErrShutdown"
+	ErrOutDatedConfig Err = "ErrOutDatedConfig"
+	ErrUnknownConfig  Err = "ErrUnknownConfig"
 )
 
 type opType string
@@ -65,4 +67,17 @@ type GetArgs struct {
 type GetReply struct {
 	Err   Err
 	Value string
+}
+
+type MigrateShardsArgs struct {
+	ConfigNum int
+	Gid       int
+	Shards    []int // TODO: need ?
+	Data      map[string]string
+	ClientId  int64
+	OpId      int
+}
+
+type MigrateShardsReply struct {
+	Err Err
 }
