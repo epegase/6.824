@@ -91,7 +91,6 @@ type GetReply struct {
 }
 
 type MigrateShardsArgs struct {
-	Gid    int             // client's gid
 	Shards map[int]kvTable // kv table for each shard
 
 	ClientId  int64 // id of client
@@ -101,4 +100,17 @@ type MigrateShardsArgs struct {
 
 type MigrateShardsReply struct {
 	Err Err
+}
+
+type RequestShardsArgs struct {
+	Shards map[int]bool // set of shards
+
+	ClientId  int64 // id of client
+	OpId      int   // client operation id
+	ConfigNum int   // num of client's shard config
+}
+
+type RequestShardsReply struct {
+	Err    Err
+	Shards map[int]kvTable // kv table for each shard
 }
