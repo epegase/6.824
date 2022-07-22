@@ -38,12 +38,9 @@ const (
 
 type Op struct {
 	Payload interface{}
-	// for duplicated op detection TODO: put into payload
-	ClientId int64
-	OpId     int
 }
 
-func (op Op) String() string {
+func (op *Op) String() string {
 	switch payload := op.Payload.(type) {
 	case GetArgs:
 		return fmt.Sprintf("{G%s}", payload.Key)
@@ -59,6 +56,20 @@ func (op Op) String() string {
 	default:
 		return ""
 	}
+}
+
+func (op *Op) getClientIdAndOpId() (clientId int64, opId int) {
+	switch payload := op.Payload.(type) {
+	case GetArgs:
+		clientId, opId = payload.ClientId, payload.OpId
+	case PutAppendArgs:
+		clientId, opId = payload.ClientId, payload.OpId
+	case MigrateShardsArgs:
+		clientId, opId = payload.ClientId, payload.OpId
+	case RequestShardsArgs:
+		clientId, opId = payload.ClientId, payload.OpId
+	}
+	return
 }
 
 // channel message from applier to RPC handler,
@@ -143,7 +154,8 @@ func (kv *ShardKV) commonHandler(requestConfigNum int, op Op) (e Err, r interfac
 		return
 	}
 
-	lablog.ShardDebug(kv.gid, kv.me, lablog.Server, "Start %v@%d, %d/%d", op, index, op.OpId, op.ClientId%100)
+	clientId, opId := op.getClientIdAndOpId()
+	lablog.ShardDebug(kv.gid, kv.me, lablog.Server, "Start %v@%d, %d/%d", op, index, opId, clientId%100)
 	c := make(chan applyResult) // reply channel for applier goroutine
 	kv.commandTbl[index] = commandEntry{op: op, replyCh: c}
 	kv.mu.Unlock()
@@ -198,7 +210,7 @@ func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) {
 		reply.Err = ErrWrongGroup
 		return
 	}
-	e, r := kv.commonHandler(args.ConfigNum, Op{Payload: *args, ClientId: args.ClientId, OpId: args.OpId})
+	e, r := kv.commonHandler(args.ConfigNum, Op{Payload: *args})
 	reply.Err = e
 	if e == OK {
 		reply.Value = r.(string)
@@ -219,7 +231,7 @@ func (kv *ShardKV) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 		reply.Err = ErrWrongGroup
 		return
 	}
-	reply.Err, _ = kv.commonHandler(args.ConfigNum, Op{Payload: *args, ClientId: args.ClientId, OpId: args.OpId})
+	reply.Err, _ = kv.commonHandler(args.ConfigNum, Op{Payload: *args})
 }
 
 /********************************* Migration **********************************/
@@ -387,7 +399,7 @@ func (kv *ShardKV) MigrateShards(args *MigrateShardsArgs, reply *MigrateShardsRe
 
 	kv.mu.Lock()
 	lablog.ShardDebug(kv.gid, kv.me, lablog.Migrate, "My CN:%d, get mig@%d, %v", kv.config.Num, args.ConfigNum, args.Shards)
-	reply.Err, _ = kv.commonHandler(args.ConfigNum, Op{Payload: *args, ClientId: args.ClientId, OpId: args.OpId})
+	reply.Err, _ = kv.commonHandler(args.ConfigNum, Op{Payload: *args})
 }
 
 /********************************* Migrate In *********************************/
@@ -528,7 +540,7 @@ func (kv *ShardKV) RequestShards(args *RequestShardsArgs, reply *RequestShardsRe
 	}
 
 	kv.mu.Lock()
-	e, r := kv.commonHandler(args.ConfigNum, Op{Payload: *args, ClientId: args.ClientId, OpId: args.OpId})
+	e, r := kv.commonHandler(args.ConfigNum, Op{Payload: *args})
 	reply.Err = e
 	reply.Shards = r.(map[int]kvTable)
 }
@@ -631,6 +643,44 @@ func StartServer(
 	return kv
 }
 
+// update my group's shard config, (it's the ONLY place where shard config can be updated)
+// and if leader, try to migrate shards out and request shards in, if any
+func (kv *ShardKV) installConfig(config shardctrler.Config) {
+	if config.Num <= kv.config.Num {
+		// outdated config, ignore it
+		return
+	}
+
+	oldConfig := kv.config
+	kv.config = config
+
+	kv.updateMigrateOut(oldConfig)
+	kv.updateMigrateIn(oldConfig)
+
+	_, isLeader := kv.rf.GetState()
+	if !isLeader {
+		// only leader can migrate any shards data out, or request any shards data in
+		return
+	}
+
+	for _, out := range kv.MigrateOut {
+		go func(ch chan<- bool) {
+			select {
+			case ch <- true:
+			default:
+			}
+		}(out.Trigger)
+	}
+	for _, in := range kv.WaitIn {
+		go func(ch chan<- bool) {
+			select {
+			case ch <- true:
+			default:
+			}
+		}(in.Trigger)
+	}
+}
+
 // The applier go routine accept applyMsg from applyCh (from underlying raft),
 // modify key-value table accordingly,
 // reply modified result back to KVServer's RPC handler, if any, through channel identified by commandIndex
@@ -638,6 +688,8 @@ func StartServer(
 func (kv *ShardKV) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger chan<- bool, lastSnapshoterTriggeredCommandIndex int) {
 	var r interface{}
 	var e Err
+	var clientId int64
+	var opId int
 
 	for m := range applyCh {
 		if m.SnapshotValid {
@@ -672,52 +724,16 @@ func (kv *ShardKV) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger chan<- 
 
 		kv.appliedCommandIndex = m.CommandIndex
 
-		if op.ClientId == 0 && op.OpId == 0 {
-			// internal Raft consensus command, for
-			// - shard config agreement
-			switch payload := op.Payload.(type) {
-			case shardctrler.Config:
-				if payload.Num <= kv.config.Num {
-					// outdated config, ignore it
-					break
-				}
-				oldConfig := kv.config
-				// update my group's shard config
-				// it's the ONLY place where shard config can be updated
-				kv.config = payload
-
-				kv.updateMigrateOut(oldConfig)
-				kv.updateMigrateIn(oldConfig)
-
-				_, isLeader := kv.rf.GetState()
-				if isLeader {
-					// only leader can migrate any shards data out
-					for _, out := range kv.MigrateOut {
-						go func(ch chan<- bool) {
-							select {
-							case ch <- true:
-							default:
-							}
-						}(out.Trigger)
-					}
-					// only leader can request any shards data in
-					for _, in := range kv.WaitIn {
-						go func(ch chan<- bool) {
-							select {
-							case ch <- true:
-							default:
-							}
-						}(in.Trigger)
-					}
-				}
-			}
-
+		if config, ok := op.Payload.(shardctrler.Config); ok {
+			kv.installConfig(config)
 			kv.mu.Unlock()
 			continue
 		}
 
-		lastOpResult := kv.ClientTbl[op.ClientId]
-		if lastOpResult.OpId >= op.OpId {
+		clientId, opId = op.getClientIdAndOpId()
+
+		lastOpResult := kv.ClientTbl[clientId]
+		if lastOpResult.OpId >= opId {
 			// detect duplicated operation
 			// reply with cached result, don't update kv table
 			r, e = lastOpResult.Value, lastOpResult.Err
@@ -747,7 +763,7 @@ func (kv *ShardKV) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger chan<- 
 			}
 
 			// cache operation result
-			kv.ClientTbl[op.ClientId] = applyResult{Err: e, Value: r, OpId: op.OpId}
+			kv.ClientTbl[clientId] = applyResult{Err: e, Value: r, OpId: opId}
 		}
 
 		ce, ok := kv.commandTbl[m.CommandIndex]
@@ -758,7 +774,7 @@ func (kv *ShardKV) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger chan<- 
 
 		// only leader server maintains commandTbl, followers just apply kv modification
 		if ok {
-			if ce.op.ClientId != op.ClientId || ce.op.OpId != op.OpId {
+			if ceClientId, ceOpId := ce.op.getClientIdAndOpId(); ceClientId != clientId || ceOpId != opId {
 				// Your solution needs to handle a leader that has called Start() for a Clerk's RPC,
 				// but loses its leadership before the request is committed to the log.
 				// In this case you should arrange for the Clerk to re-send the request to other servers
