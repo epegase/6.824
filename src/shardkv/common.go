@@ -91,7 +91,8 @@ type GetReply struct {
 }
 
 type MigrateShardsArgs struct {
-	Shards map[int]kvTable // kv table for each shard
+	FromGid int
+	Todos   migrateTodoQueue
 
 	ClientId  int64 // id of client
 	OpId      int   // client operation id
