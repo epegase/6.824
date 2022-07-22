@@ -47,6 +47,11 @@ const (
 	// client should wait for a while and retry to the same server,
 	// hoping this time server's shard config is updated
 	ErrUnknownConfig Err = "ErrUnknownConfig"
+	// server reply when requested key's shard is in migration,
+	// server will try to actively request this shard from source group,
+	// client should wait for a while and retry to the same server,
+	// hoping this time this shard's migration is done
+	ErrInMigration Err = "ErrInMigration"
 )
 
 type opType string
@@ -59,12 +64,13 @@ const (
 
 // Put or Append
 type PutAppendArgs struct {
-	Key       string
-	Value     string
-	Op        opType // "Put" or "Append"
-	ClientId  int64  // id of client
-	OpId      int    // client operation id
-	ConfigNum int    // num of client's shard config
+	Key   string
+	Value string
+	Op    opType // "Put" or "Append"
+
+	ClientId  int64 // id of client
+	OpId      int   // client operation id
+	ConfigNum int   // num of client's shard config
 }
 
 type PutAppendReply struct {
@@ -72,7 +78,8 @@ type PutAppendReply struct {
 }
 
 type GetArgs struct {
-	Key       string
+	Key string
+
 	ClientId  int64 // id of client
 	OpId      int   // client operation id
 	ConfigNum int   // num of client's shard config
@@ -84,12 +91,12 @@ type GetReply struct {
 }
 
 type MigrateShardsArgs struct {
-	Gid       int               // client's gid
-	Shards    []int             // TODO: need ?
-	Data      map[string]string // shards' kv table
-	ClientId  int64             // id of client
-	OpId      int               // client operation id
-	ConfigNum int               // num of client's shard config
+	Gid    int             // client's gid
+	Shards map[int]kvTable // kv table for each shard
+
+	ClientId  int64 // id of client
+	OpId      int   // client operation id
+	ConfigNum int   // num of client's shard config
 }
 
 type MigrateShardsReply struct {

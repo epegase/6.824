@@ -17,7 +17,10 @@ import (
 )
 
 const (
+	// periodically poll shardctrler to learn about new shard config
 	clientRefreshConfigInterval = 100
+	// client be told to wait a while and retry
+	clientWaitAndRetryInterval = 50
 )
 
 type Clerk struct {
@@ -83,8 +86,8 @@ func (ck *Clerk) Get(key string) string {
 			}
 
 			ck.groupLeader[gid] = serverId
-			if reply.Err == ErrUnknownConfig {
-				time.Sleep(50 * time.Millisecond)
+			if reply.Err == ErrUnknownConfig || reply.Err == ErrInMigration {
+				time.Sleep(clientWaitAndRetryInterval * time.Millisecond)
 				continue
 			}
 			if reply.Err == ErrWrongGroup {
@@ -145,8 +148,8 @@ func (ck *Clerk) PutAppend(key string, value string, op opType) {
 			}
 
 			ck.groupLeader[gid] = serverId
-			if reply.Err == ErrUnknownConfig {
-				time.Sleep(50 * time.Millisecond)
+			if reply.Err == ErrUnknownConfig || reply.Err == ErrInMigration {
+				time.Sleep(clientWaitAndRetryInterval * time.Millisecond)
 				continue
 			}
 			if reply.Err == ErrWrongGroup {
