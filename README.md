@@ -42,6 +42,7 @@ b6143938e1a4a0eb1f27f121acdde63c
   ✅ [4A (Shard Controller) test cases, thousands iterations](./lab-test-results/shard4A-dstest.txt)  
   ✅ [4A (Shard Controller) test cases, with race detector, hundreds iterations](./lab-test-results/shard4A-dstest-with-race-detector.txt)  
   ✅ [4B (Sharded Key/Value Server) test cases, one iteration](./lab-test-results/shard4B.txt)  
+  ✅ [4B (Sharded Key/Value Server) test cases, hundreds iteration](./lab-test-results/shard4B-dstest.txt)  
 
 ### Progress
 

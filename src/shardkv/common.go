@@ -48,7 +48,6 @@ const (
 	// hoping this time server's shard config is updated
 	ErrUnknownConfig Err = "ErrUnknownConfig"
 	// server reply when requested key's shard is in migration,
-	// server will try to actively request this shard from source group,
 	// client should wait for a while and retry to the same server,
 	// hoping this time this shard's migration is done
 	ErrInMigration Err = "ErrInMigration"
@@ -91,8 +90,8 @@ type GetReply struct {
 }
 
 type MigrateShardsArgs struct {
-	FromGid int
-	Todos   migrateTodoQueue
+	FromGid int              // gid that send this request
+	Todos   migrateTodoQueue // all todo migrations
 
 	ClientId  int64 // id of client
 	OpId      int   // client operation id
@@ -100,18 +99,7 @@ type MigrateShardsArgs struct {
 }
 
 type MigrateShardsReply struct {
-	Err Err
-}
-
-type RequestShardsArgs struct {
-	Shards map[int]bool // set of shards
-
-	ClientId  int64 // id of client
-	OpId      int   // client operation id
-	ConfigNum int   // num of client's shard config
-}
-
-type RequestShardsReply struct {
-	Err    Err
-	Shards map[int]kvTable // kv table for each shard
+	Err               Err
+	FromGid           int // gid that send this reply
+	LastTodoConfigNum int // configNum of last todo of the corresponding request
 }
