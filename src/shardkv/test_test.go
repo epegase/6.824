@@ -19,7 +19,7 @@ const linearizabilityCheckTimeout = 1 * time.Second
 func check(t *testing.T, ck *Clerk, key string, value string) {
 	v := ck.Get(key)
 	if v != value {
-		t.Fatalf("Get(%v): expected:\n%v\nreceived:\n%v", key, value, v)
+		t.Fatalf("Get(%v@S%d): expected:\n%v\nreceived:\n%v", key, key2shard(key), value, v)
 	}
 }
 

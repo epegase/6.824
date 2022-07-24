@@ -90,8 +90,8 @@ type GetReply struct {
 }
 
 type MigrateShardsArgs struct {
-	FromGid int              // gid that send this request
-	Todos   migrateTodoQueue // all todo migrations
+	FromGid int            // gid that send this request
+	Shards  kvTableByShard // map of shard->kvTable
 
 	ClientId  int64 // id of client
 	OpId      int   // client operation id
@@ -99,7 +99,7 @@ type MigrateShardsArgs struct {
 }
 
 type MigrateShardsReply struct {
-	Err               Err
-	FromGid           int // gid that send this reply
-	LastTodoConfigNum int // configNum of last todo of the corresponding request
+	Err       Err
+	FromGid   int // gid that send this reply
+	Installed set // installed shards set
 }
