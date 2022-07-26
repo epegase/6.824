@@ -116,7 +116,7 @@ type shardData struct {
 
 // shardDate copier
 func (s shardData) Copy() shardData {
-	t := shardData{Gid: s.Gid, ConfigNum: s.ConfigNum, Data: make(kvTable)}
+	t := shardData{Gid: s.Gid, ConfigNum: s.ConfigNum, Data: kvTable{}}
 	s.Data.copyInto(t.Data)
 	return t
 }
@@ -206,7 +206,7 @@ type ShardKV struct {
 	configFetcherTrigger chan bool            // trigger configFetcher to update shard config
 
 	// need to persist between restart
-	Tbl        kvTable               // key-value table TODO: by shard
+	Tbl        shards                // key-value table by shard
 	ClientTbl  map[int64]applyResult // map from clientId to last RPC operation result (for duplicated operation detection)
 	ClientId   int64                 // when migrate shards data to other group, act as a ShardKV client, so need a ClientId
 	OpId       int                   // also for duplicated migration detection, need an OpId
@@ -416,7 +416,7 @@ func (kv *ShardKV) migrateShards(gid int) {
 				// or if is in my group's WaitIn, this wait-in shard is waited in the future,
 				// after it migrates out from my group,
 				// so this shard still needs to migrate out first, then my group waits it back in
-				args.Shards[shard] = out.Copy() // TODO: need copy ?
+				args.Shards[shard] = out.Copy()
 			}
 		}
 		if len(args.Shards) == 0 {
@@ -552,14 +552,14 @@ func StartServer(
 	kv.commandTbl = make(map[int]commandEntry)
 	kv.configFetcherTrigger = make(chan bool, 1)
 
-	kv.Tbl = kvTable{}
+	kv.Tbl = shards{}
 	kv.ClientTbl = make(map[int64]applyResult)
 	kv.ClientId = labutil.Nrand()
 	kv.OpId = 1
 	kv.Config = shardctrler.Config{Num: 0}
 	kv.Cluster = make(map[int]*groupInfo)
-	kv.MigrateOut = make(shards)
-	kv.WaitIn = make(shards)
+	kv.MigrateOut = shards{}
+	kv.WaitIn = shards{}
 
 	// initialize from snapshot persisted before a crash
 	kv.readSnapshot(persister.ReadSnapshot())
@@ -597,15 +597,10 @@ func (kv *ShardKV) updateMigrateOut(oldConfig shardctrler.Config) {
 	for shard, oldGid := range oldConfig.Shards {
 		if newGid := kv.Config.Shards[shard]; oldGid == kv.gid && newGid != kv.gid {
 			// shard in my group of oldConfig, but not in my group of current config, so need to migrate out
-			kv.MigrateOut[shard] = shardData{Gid: newGid, ConfigNum: kv.Config.Num, Data: kvTable{}}
-		}
-	}
 
-	for k, v := range kv.Tbl {
-		if out, ok := kv.MigrateOut[key2shard(k)]; ok {
-			// move into kvTable of this shard, from my group's kvTable
-			out.Data[k] = v
-			// TODO: remove key from kv.Tbl
+			// move this shard into migration, and remove from my group's shards
+			kv.MigrateOut[shard] = shardData{Gid: newGid, ConfigNum: kv.Config.Num, Data: kv.Tbl[shard].Data}
+			delete(kv.Tbl, shard)
 		}
 	}
 
@@ -633,7 +628,7 @@ func (kv *ShardKV) updateWaitIn(oldConfig shardctrler.Config) {
 				// shard has reached before my group is aware of the shard config change,
 				// so when my group know this shard config change,
 				// my group can happily accept this shard and install into my kvTable
-				in.Data.copyInto(kv.Tbl)
+				kv.Tbl[shard] = shardData{Gid: kv.gid, ConfigNum: kv.Config.Num, Data: in.Copy().Data}
 				delete(kv.WaitIn, shard)
 			}
 		}
@@ -688,22 +683,27 @@ func (kv *ShardKV) installConfig(config shardctrler.Config) {
 // apply Get RPC request, with mutex held
 func (kv *ShardKV) applyGetArgs(args *GetArgs) (r string, e Err) {
 	// TODO: wait in ?
-	if !kv.shouldServeShard(key2shard(args.Key)) {
+	shard := key2shard(args.Key)
+	if !kv.shouldServeShard(shard) {
 		return "", ErrWrongGroup
 	}
-	return kv.Tbl[args.Key], OK
+	return kv.Tbl[shard].Data[args.Key], OK
 }
 
 // apply PutAppend RPC request, with mutex held
 func (kv *ShardKV) applyPutAppendArgs(args *PutAppendArgs) (r interface{}, e Err) {
 	// TODO: wait in ?
-	if !kv.shouldServeShard(key2shard(args.Key)) {
+	shard := key2shard(args.Key)
+	if !kv.shouldServeShard(shard) {
 		return nil, ErrWrongGroup
 	}
+	if _, ok := kv.Tbl[shard]; !ok {
+		kv.Tbl[shard] = shardData{Gid: kv.gid, ConfigNum: kv.Config.Num, Data: kvTable{}}
+	}
 	if args.Op == opPut {
-		kv.Tbl[args.Key] = args.Value
+		kv.Tbl[shard].Data[args.Key] = args.Value
 	} else {
-		kv.Tbl[args.Key] += args.Value
+		kv.Tbl[shard].Data[args.Key] += args.Value
 	}
 	return nil, OK
 }
@@ -720,25 +720,25 @@ func (kv *ShardKV) applyMigrateShardsArgs(args *MigrateShardsArgs) (r set, e Err
 		if migration.ConfigNum > kv.Config.Num {
 			// migration shard reaches before my group is aware of the shard config change,
 			// and my group trusts the migration source group,
-			// believing this shard will be needed in the future config,
-			// so accept this shard, store it into my WaitIn
+			// believing this migration shard will be needed in the future config,
+			// so accept this migration shard, store it into my WaitIn
 			kv.WaitIn[shard] = migration
 		}
 
 		if in, ok := kv.WaitIn[shard]; ok && migration.ConfigNum == in.ConfigNum {
 			// migration shard matches the same shard in my group's WaitIn,
-			// they are of the same shard config, so my group should accept this shard
+			// they are of the same shard config, so my group should accept this migration shard
 
 			if out, ok := kv.MigrateOut[shard]; ok && out.ConfigNum > in.ConfigNum {
-				// this shard need to migrate out, so no need to copy into my group's kvTable,
-				// instead, copy this shard into MigrateOut
-				migration.Data.copyInto(out.Data)
+				// this migration shard need to migrate out, so no need to install into my group's shards,
+				// instead, move this migration shard to MigrateOut
+				kv.MigrateOut[shard] = shardData{Gid: out.Gid, ConfigNum: out.ConfigNum, Data: migration.Data}
 				migrateOutGroups[out.Gid] = true
 				delete(kv.WaitIn, shard) // remove shard from my group's WaitIn
 				r[shard] = true          // tell caller this shard is installed to my group
 			} else if kv.shouldServeShard(shard) {
 				// my group should serve request for this shard, so install shard into my group's kvTable
-				migration.Data.copyInto(kv.Tbl)
+				kv.Tbl[shard] = shardData{Gid: kv.gid, ConfigNum: kv.Config.Num, Data: migration.Copy().Data}
 				delete(kv.WaitIn, shard) // remove shard from my group's WaitIn
 				r[shard] = true          // tell caller this shard is installed to my group
 			}
@@ -989,7 +989,7 @@ func (kv *ShardKV) readSnapshot(data []byte) {
 	}
 	r := bytes.NewBuffer(data)
 	d := labgob.NewDecoder(r)
-	var tbl kvTable
+	var tbl shards
 	var clientTbl map[int64]applyResult
 	var clientId int64
 	var opId int

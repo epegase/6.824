@@ -8,17 +8,17 @@ Initial iterations: 128
 ┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
 ┃ Test             ┃ Failed ┃ Total ┃        Time ┃
 ┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
-│ TestStaticShards │      0 │   128 │ 3.10 ± 0.31 │
-│ TestJoinLeave    │      0 │   128 │ 2.08 ± 0.34 │
-│ TestSnapshot     │      0 │   128 │ 3.19 ± 0.31 │
+│ TestStaticShards │      0 │   128 │ 3.13 ± 0.29 │
+│ TestJoinLeave    │      0 │   128 │ 2.12 ± 0.30 │
+│ TestSnapshot     │      0 │   128 │ 3.28 ± 0.31 │
 └──────────────────┴────────┴───────┴─────────────┘
 Increasing iterations to 256
 ┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
 ┃ Test             ┃ Failed ┃ Total ┃        Time ┃
 ┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
-│ TestStaticShards │      0 │   256 │ 3.12 ± 0.24 │
-│ TestJoinLeave    │      0 │   256 │ 2.10 ± 0.23 │
-│ TestSnapshot     │      0 │   256 │ 3.25 ± 0.25 │
+│ TestStaticShards │      0 │   256 │ 3.17 ± 0.23 │
+│ TestJoinLeave    │      0 │   256 │ 2.13 ± 0.24 │
+│ TestSnapshot     │      0 │   256 │ 3.31 ± 0.25 │
 └──────────────────┴────────┴───────┴─────────────┘
 
 Completed 384 iterations in total
