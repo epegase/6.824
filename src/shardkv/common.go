@@ -90,8 +90,8 @@ type GetReply struct {
 }
 
 type MigrateShardsArgs struct {
-	FromGid int            // gid that send this request
-	Shards  kvTableByShard // map of shard->kvTable
+	FromGid int    // gid that send this request
+	Shards  shards // migration shards
 
 	ClientId  int64 // id of client
 	OpId      int   // client operation id
@@ -99,7 +99,10 @@ type MigrateShardsArgs struct {
 }
 
 type MigrateShardsReply struct {
-	Err       Err
-	FromGid   int // gid that send this reply
+	Err     Err
+	FromGid int // gid that send this reply
+
+	// TODO: debug
 	Installed set // installed shards set
+	Accepted  set
 }

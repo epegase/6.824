@@ -63,13 +63,13 @@ func (ck *Clerk) Get(key string) string {
 	args := &GetArgs{
 		Key:      key,
 		ClientId: ck.me,
-		OpId:     ck.opId,
 	}
-	ck.opId++
 	shard := key2shard(key)
 
 	for {
 		args.ConfigNum = ck.config.Num
+		args.OpId = ck.opId
+		ck.opId++
 		sleepInterval := clientRefreshConfigInterval
 
 		gid := ck.config.Shards[shard]
@@ -125,13 +125,13 @@ func (ck *Clerk) PutAppend(key string, value string, op opType) {
 		Value:    value,
 		Op:       op,
 		ClientId: ck.me,
-		OpId:     ck.opId,
 	}
-	ck.opId++
 	shard := key2shard(key)
 
 	for {
 		args.ConfigNum = ck.config.Num
+		args.OpId = ck.opId
+		ck.opId++
 		sleepInterval := clientRefreshConfigInterval
 
 		gid := ck.config.Shards[shard]

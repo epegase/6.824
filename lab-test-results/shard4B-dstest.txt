@@ -1,4 +1,4 @@
-Run as `./dstest -p24 -n128 -l -g2 -m256 -ff -ts TestStaticShards,TestJoinLeave`
+Run as `./dstest -p24 -n128 -l -g2 -m256 -ff -pa Test -u TestSnapshot`
 
 Running with 24 workers / 8 CPU cores available
 Running on CPU model: Intel(R) Core(TM) i5-8259U CPU @ 2.30GHz
@@ -8,15 +8,17 @@ Initial iterations: 128
 ┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
 ┃ Test             ┃ Failed ┃ Total ┃        Time ┃
 ┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
-│ TestStaticShards │      0 │   128 │ 3.15 ± 0.34 │
-│ TestJoinLeave    │      0 │   128 │ 2.09 ± 0.33 │
+│ TestStaticShards │      0 │   128 │ 3.10 ± 0.31 │
+│ TestJoinLeave    │      0 │   128 │ 2.08 ± 0.34 │
+│ TestSnapshot     │      0 │   128 │ 3.19 ± 0.31 │
 └──────────────────┴────────┴───────┴─────────────┘
 Increasing iterations to 256
 ┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
 ┃ Test             ┃ Failed ┃ Total ┃        Time ┃
 ┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
-│ TestStaticShards │      0 │   256 │ 3.14 ± 0.30 │
-│ TestJoinLeave    │      0 │   256 │ 2.07 ± 0.28 │
+│ TestStaticShards │      0 │   256 │ 3.12 ± 0.24 │
+│ TestJoinLeave    │      0 │   256 │ 2.10 ± 0.23 │
+│ TestSnapshot     │      0 │   256 │ 3.25 ± 0.25 │
 └──────────────────┴────────┴───────┴─────────────┘
 
 Completed 384 iterations in total

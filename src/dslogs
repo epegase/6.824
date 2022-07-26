@@ -31,7 +31,7 @@ TOPICS = {
     "INFO": "#ffffff",
     "WARN": "#d08341",
     "ERRO": "#fe2626",
-    "TRCE": "#fe2626",
+    "TRCE": "#aacc00",
     "CONF": "#ffe411",
     "HART": "#810672",
     "SRVR": "#ff7dfa",
