@@ -63,13 +63,13 @@ func (ck *Clerk) Get(key string) string {
 	args := &GetArgs{
 		Key:      key,
 		ClientId: ck.me,
+		OpId:     ck.opId,
 	}
+	ck.opId++
 	shard := key2shard(key)
 
 	for {
 		args.ConfigNum = ck.config.Num
-		args.OpId = ck.opId
-		ck.opId++
 		sleepInterval := clientRefreshConfigInterval
 
 		gid := ck.config.Shards[shard]
@@ -84,6 +84,10 @@ func (ck *Clerk) Get(key string) string {
 				i++
 				continue
 			}
+			if reply.Err == ErrInitElection {
+				time.Sleep(clientWaitAndRetryInterval * time.Millisecond)
+				continue
+			}
 
 			ck.groupLeader[gid] = serverId
 			if reply.Err == ErrUnknownConfig || reply.Err == ErrInMigration {
@@ -91,6 +95,21 @@ func (ck *Clerk) Get(key string) string {
 				continue
 			}
 			if reply.Err == ErrWrongGroup {
+				// IMPORTANT: ensure linearizability
+				// to avoid this scenario:
+				// 1. request to server A, server A start Raft consensus
+				// 2. when request get applied, server A just updated its shard config,
+				// 		and server A find out that it should not serve request's key,
+				//		so server A reply with ErrWrongGroup,
+				// 3. client wait a while and retry this request
+				// 4. when retried request arrive server A,
+				//		some shard config changes has been updated on server A,
+				//		and now server A SHOULD serve request's key,
+				//		and server A should not reply with previous cached result
+				//
+				// so client should increment request's opId to renew request
+				args.OpId = ck.opId
+				ck.opId++
 				break
 			}
 			if reply.Err == ErrOutdatedConfig {
@@ -125,13 +144,13 @@ func (ck *Clerk) PutAppend(key string, value string, op opType) {
 		Value:    value,
 		Op:       op,
 		ClientId: ck.me,
+		OpId:     ck.opId,
 	}
+	ck.opId++
 	shard := key2shard(key)
 
 	for {
 		args.ConfigNum = ck.config.Num
-		args.OpId = ck.opId
-		ck.opId++
 		sleepInterval := clientRefreshConfigInterval
 
 		gid := ck.config.Shards[shard]
@@ -146,6 +165,10 @@ func (ck *Clerk) PutAppend(key string, value string, op opType) {
 				i++
 				continue
 			}
+			if reply.Err == ErrInitElection {
+				time.Sleep(clientWaitAndRetryInterval * time.Millisecond)
+				continue
+			}
 
 			ck.groupLeader[gid] = serverId
 			if reply.Err == ErrUnknownConfig || reply.Err == ErrInMigration {
@@ -153,6 +176,21 @@ func (ck *Clerk) PutAppend(key string, value string, op opType) {
 				continue
 			}
 			if reply.Err == ErrWrongGroup {
+				// IMPORTANT: ensure linearizability
+				// to avoid this scenario:
+				// 1. request to server A, server A start Raft consensus
+				// 2. when request get applied, server A just updated its shard config,
+				// 		and server A find out that it should not serve request's key,
+				//		so server A reply with ErrWrongGroup,
+				// 3. client wait a while and retry this request
+				// 4. when retried request arrive server A,
+				//		some shard config changes has been updated on server A,
+				//		and now server A SHOULD serve request's key,
+				//		and server A should not reply with previous cached result
+				//
+				// so client should increment request's opId to renew request
+				args.OpId = ck.opId
+				ck.opId++
 				break
 			}
 			if reply.Err == ErrOutdatedConfig {

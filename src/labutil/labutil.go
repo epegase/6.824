@@ -2,6 +2,7 @@ package labutil
 
 import (
 	crand "crypto/rand"
+	"fmt"
 	"math/big"
 	mrand "math/rand"
 )
@@ -30,4 +31,15 @@ func Nrand() int64 {
 	bigx, _ := crand.Int(crand.Reader, max)
 	x := bigx.Int64()
 	return x
+}
+
+// convert int to subscript, e.g. 12 -> ₁₂
+func ToSubscript(i int) (r string) {
+	for r, i = fmt.Sprintf("%c", 8320+(i%10)), i/10; i != 0; r, i = fmt.Sprintf("%c", 8320+(i%10))+r, i/10 {
+	}
+	return
+}
+
+func Suffix(s string, cnt int) string {
+	return s[Max(0, len(s)-cnt):]
 }

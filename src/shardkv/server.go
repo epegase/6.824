@@ -37,6 +37,8 @@ const (
 	serverRefreshConfigInterval = 100
 	// client be told to wait a while and retry
 	serverWaitAndRetryInterval = 50
+	// migrator periodically check any pending migration and trigger shardsMigrator for that group
+	migratorInterval = 100
 )
 
 type Op struct {
@@ -47,55 +49,81 @@ type Op struct {
 func (op Op) String() string {
 	switch payload := op.Payload.(type) {
 	case GetArgs:
-		return fmt.Sprintf("{G%sS%d}", payload.Key, key2shard(payload.Key))
+		return fmt.Sprintf("{G%s %d%s %d#%d}", payload.Key, key2shard(payload.Key), labutil.ToSubscript(payload.ConfigNum), payload.ClientId%100, payload.OpId)
 	case PutAppendArgs:
 		if payload.Op == opPut {
-			return fmt.Sprintf("{P%sS%d}", payload.Key, key2shard(payload.Key))
+			return fmt.Sprintf("{P%s=%s %d%s %d#%d}", payload.Key, labutil.Suffix(payload.Value, 4), key2shard(payload.Key), labutil.ToSubscript(payload.ConfigNum), payload.ClientId%100, payload.OpId)
 		}
-		return fmt.Sprintf("{A%sS%d}", payload.Key, key2shard(payload.Key))
+		return fmt.Sprintf("{A%s+=%s %d%s %d#%d}", payload.Key, labutil.Suffix(payload.Value, 4), key2shard(payload.Key), labutil.ToSubscript(payload.ConfigNum), payload.ClientId%100, payload.OpId)
 	case MigrateShardsArgs:
-		return fmt.Sprintf("{MG%d %v}", payload.FromGid, payload.Shards)
+		return fmt.Sprintf("{I%s G%d-> %v %d#%d}", labutil.ToSubscript(payload.ConfigNum), payload.FromGid, payload.Shards, payload.ClientId%100, payload.OpId)
 	default:
 		return ""
 	}
 }
 
-func (op *Op) getClientIdAndOpId() (clientId int64, opId int) {
+func (op *Op) getClientId() (clientId int64) {
 	switch payload := op.Payload.(type) {
 	case GetArgs:
-		return payload.ClientId, payload.OpId
+		return payload.ClientId
 	case PutAppendArgs:
-		return payload.ClientId, payload.OpId
+		return payload.ClientId
 	case MigrateShardsArgs:
-		return payload.ClientId, payload.OpId
+		return payload.ClientId
 	}
 	return
 }
 
-func (op *Op) getConfigNumAndShard() (configNum int, shard int) {
+func (op *Op) getOpId() (opId int) {
 	switch payload := op.Payload.(type) {
 	case GetArgs:
-		return payload.ConfigNum, key2shard(payload.Key)
+		return payload.OpId
 	case PutAppendArgs:
-		return payload.ConfigNum, key2shard(payload.Key)
+		return payload.OpId
 	case MigrateShardsArgs:
-		return payload.ConfigNum, -1
+		return payload.OpId
 	}
 	return
+}
+
+func (op *Op) getConfigNum() (configNum int) {
+	switch payload := op.Payload.(type) {
+	case GetArgs:
+		return payload.ConfigNum
+	case PutAppendArgs:
+		return payload.ConfigNum
+	case MigrateShardsArgs:
+		return payload.ConfigNum
+	}
+	return
+}
+
+func (op *Op) getShard() (shard int) {
+	switch payload := op.Payload.(type) {
+	case GetArgs:
+		return key2shard(payload.Key)
+	case PutAppendArgs:
+		return key2shard(payload.Key)
+	}
+	return -1
 }
 
 // channel message from applier to RPC handler,
-// and as cached operation result, to respond to duplicated operation
 type applyResult struct {
 	Err   Err
 	Value interface{}
-	OpId  int
 }
 
 // reply channel from applier to RPC handler, of a commandIndex
 type commandEntry struct {
 	op      Op
 	replyCh chan applyResult
+}
+
+// cached operation result, to respond to duplicated operation
+type cache struct {
+	Op     Op
+	Result applyResult
 }
 
 type kvTable map[string]string
@@ -112,6 +140,11 @@ type shardData struct {
 	Gid       int     // resident group
 	ConfigNum int     // of which config should this shard in Gid group
 	Data      kvTable // this shard's data
+}
+
+// shardData stringer
+func (s shardData) String() string {
+	return fmt.Sprintf("%s @G%d", labutil.ToSubscript(s.ConfigNum), s.Gid)
 }
 
 // shardDate copier
@@ -137,14 +170,19 @@ func (s set) Equal(another set) bool {
 	return true
 }
 
-// set stringer
-func (s set) String() (r string) {
+// ordered set
+func (s set) toOrdered() []int {
 	elems := []int{}
 	for e := range s {
 		elems = append(elems, e)
 	}
 	sort.Ints(elems)
-	for _, e := range elems {
+	return elems
+}
+
+// set stringer
+func (s set) String() (r string) {
+	for _, e := range s.toOrdered() {
 		r += strconv.Itoa(e)
 	}
 	return "[" + r + "]"
@@ -154,34 +192,47 @@ func (s set) String() (r string) {
 type shards map[int]shardData
 
 // set of all shards
-func (s shards) toSet() set {
-	set := set{}
+func (s shards) toShardSet() (r set) {
+	r = set{}
 	for shard := range s {
-		set[shard] = true
+		r[shard] = true
 	}
-	return set
+	return
+}
+
+// set of all groups
+func (s shards) toGroupSet() (r set) {
+	r = set{}
+	for _, data := range s {
+		r[data.Gid] = true
+	}
+	return
 }
 
 // shards stringer
 func (s shards) String() string {
-	return s.toSet().String()
+	r := []string{}
+	for _, shard := range s.toShardSet().toOrdered() {
+		r = append(r, fmt.Sprintf("%d%s", shard, labutil.ToSubscript(s[shard].ConfigNum)))
+	}
+	return "[" + strings.Join(r, " ") + "]"
 }
 
 // shards group by gid
 func (s shards) ByGroup() string {
-	group := make(map[int]set)
+	group := make(map[int]shards)
 	for shard, data := range s {
 		if _, ok := group[data.Gid]; !ok {
-			group[data.Gid] = set{}
+			group[data.Gid] = shards{}
 		}
-		group[data.Gid][shard] = true
+		group[data.Gid][shard] = data
 	}
 
 	r := []string{}
 	for gid, s := range group {
-		r = append(r, fmt.Sprintf("G%d %v", gid, s))
+		r = append(r, fmt.Sprintf("G%d%v", gid, s))
 	}
-	return strings.Join(r, "/")
+	return strings.Join(r, "|")
 }
 
 // info of a group
@@ -204,16 +255,20 @@ type ShardKV struct {
 	commandTbl           map[int]commandEntry // map from commandIndex to commandEntry, maintained by leader, initialized to empty when restart
 	appliedCommandIndex  int                  // last applied commandIndex from applyCh
 	configFetcherTrigger chan bool            // trigger configFetcher to update shard config
+	migrationTrigger     chan bool            // trigger migrator to check any pending migration
 
 	// need to persist between restart
-	Tbl        shards                // key-value table by shard
-	ClientTbl  map[int64]applyResult // map from clientId to last RPC operation result (for duplicated operation detection)
-	ClientId   int64                 // when migrate shards data to other group, act as a ShardKV client, so need a ClientId
-	OpId       int                   // also for duplicated migration detection, need an OpId
-	Config     shardctrler.Config    // latest known shard config
-	Cluster    map[int]*groupInfo    // map of gid -> group info
-	MigrateOut shards                // shards that need to migrate out
-	WaitIn     shards                // shards that wait migration in
+	Tbl       shards          // key-value table by shard
+	ClientTbl map[int64]cache // map from clientId to last RPC operation result (for duplicated operation detection)
+
+	// TODO: use gid as client id and Raft consensus to agree on opId (act as ONE)
+	ClientId int64 // when migrate shards data to other group, act as a ShardKV client, so need a ClientId
+	OpId     int   // also for duplicated migration detection, need an OpId
+
+	Config     shardctrler.Config // latest known shard config
+	Cluster    map[int]*groupInfo // map of gid -> group info
+	MigrateOut shards             // shards that need to migrate out
+	WaitIn     shards             // shards that wait migration in
 }
 
 // test if my group should serve shard, with mutex held
@@ -232,7 +287,9 @@ func (kv *ShardKV) isInWaitIn(shard int) bool {
 // 1. check not killed
 // 2. check is leader
 // 3. check request's configNum, and trigger config fetcher if necessary
-// 4. if is request of Get or PutAppend RPC, check if the resident shard can be served
+// 4. if is request of Get or PutAppend RPC
+// 4.1. check if any cached result
+// 4.2. check if the resident shard can be served
 // 5. start Raft consensus
 // 6. wait for agreement result from applier goroutine
 // 7. return with RPC reply result
@@ -254,13 +311,11 @@ func (kv *ShardKV) commonHandler(op Op) (e Err, r interface{}) {
 		return
 	}
 
-	requestConfigNum, shard := op.getConfigNumAndShard()
-
 	// IMPORTANT: lock before rf.Start,
 	// to avoid raft finish too quick before kv.commandTbl has set replyCh for this commandIndex
 	kv.mu.Lock()
 
-	switch op.Payload.(type) {
+	switch requestConfigNum := op.getConfigNum(); op.Payload.(type) {
 	case MigrateShardsArgs:
 		if kv.Config.Num < requestConfigNum {
 			// my shard config seems outdated, tell configFetcher to update
@@ -275,12 +330,32 @@ func (kv *ShardKV) commonHandler(op Op) (e Err, r interface{}) {
 			e = ErrUnknownConfig
 			return
 		}
+		if lastOpCache, ok := kv.ClientTbl[op.getClientId()]; ok && lastOpCache.Op.getOpId() >= op.getOpId() {
+			// IMPORTANT: check any cached result before reply with ErrOutdatedConfig
+			// to avoid a scenario that:
+			// 1. append to server A of group 1, and server A start Raft consensus process
+			// 2. but then server A abort append request, reply with ErrWrongLeader, because of term changed (some other server call election)
+			// 3. but server A reclaim leadership and commit append request in step 1
+			// 4. meanwhile, client resend this append request,
+			// 		if server A check and reply with ErrOutdatedConfig first,
+			//		there may be a chance that client find out it need to send to another group 2,
+			//		because this client fetched a new shard config,
+			//		then when this client send this append request to the group 2,
+			//		this may become a SECOND SAME append request,
+			//		IF group 1 just migrated the shard of append to group 2
+			//
+			// check cache result first can avoid this scenario
+			kv.mu.Unlock()
+			r, e = lastOpCache.Result.Value, lastOpCache.Result.Err
+			return
+		}
 		if kv.Config.Num > requestConfigNum {
 			// request's config is outdated, abort request, and tell client to update its shard config
 			kv.mu.Unlock()
 			e = ErrOutdatedConfig
 			return
 		}
+		shard := op.getShard()
 		if kv.Config.Num == 0 || !kv.shouldServeShard(shard) {
 			// no config fetched, or is not responsible for key's shard
 			kv.mu.Unlock()
@@ -296,14 +371,18 @@ func (kv *ShardKV) commonHandler(op Op) (e Err, r interface{}) {
 	}
 
 	index, term, isLeader := kv.rf.Start(op)
+	if term == 0 {
+		kv.mu.Unlock()
+		e = ErrInitElection
+		return
+	}
 	if !isLeader {
 		kv.mu.Unlock()
 		e = ErrWrongLeader
 		return
 	}
 
-	// clientId, opId := op.getClientIdAndOpId()
-	//* lablog.ShardDebug(kv.gid, kv.me, lablog.Server, "Start %v@%d, %d/%d", op, index, opId, clientId%100)
+	lablog.ShardDebug(kv.gid, kv.me, lablog.Server, "Start %v@%d", op, index)
 
 	c := make(chan applyResult) // reply channel for applier goroutine
 	kv.commandTbl[index] = commandEntry{op: op, replyCh: c}
@@ -322,6 +401,7 @@ CheckTermAndWaitReply:
 			return
 		case <-time.After(rpcHandlerCheckRaftTermInterval * time.Millisecond):
 			if t, _ := kv.rf.GetState(); term != t {
+				lablog.ShardDebug(kv.gid, kv.me, lablog.Server, "Start %v@%d but NOT leader, term changed", op, index)
 				e = ErrWrongLeader
 				break CheckTermAndWaitReply
 			}
@@ -356,41 +436,8 @@ func (kv *ShardKV) MigrateShards(args *MigrateShardsArgs, reply *MigrateShardsRe
 	e, r := kv.commonHandler(Op{Payload: *args})
 	reply.Err = e
 	if e == OK {
-		reply.FromGid = kv.gid
+		reply.Gid = kv.gid
 		reply.Installed = r.(set)
-	}
-}
-
-// trigger a MigrateShards RPC call to gid, with mutex held
-func (kv *ShardKV) triggerMigration(gid int) {
-	go func(trigger chan<- bool) {
-		select {
-		case trigger <- true:
-		default:
-		}
-	}(kv.Cluster[gid].MigrationTrigger)
-}
-
-// trigger migration for each group, with mutex held
-func (kv *ShardKV) triggerMigrationForEachGroup() {
-	groupSet := set{}
-	for _, out := range kv.MigrateOut {
-		groupSet[out.Gid] = true
-	}
-	for gid := range groupSet {
-		kv.triggerMigration(gid)
-	}
-}
-
-// The shardsMigrator go routine act as a long-run goroutine to migrate shards for ONE group,
-// it is created when my group try to migrate shards to this group at first time,
-// and upon receiving trigger signal, call MigrateShards RPC to this group
-func (kv *ShardKV) shardsMigrator(gid int, trigger <-chan bool) {
-	for !kv.killed() {
-		if _, ok := <-trigger; !ok {
-			return
-		}
-		kv.migrateShards(gid)
 	}
 }
 
@@ -423,6 +470,15 @@ func (kv *ShardKV) migrateShards(gid int) {
 			// no shards need to migrate out, migration is done in this turn
 			kv.mu.Unlock()
 			return
+		}
+
+		// IMPORTANT: need to provide at-most-once semantics (duplicate detection),
+		// 						for client requests across shard movement
+		args.ClientTbl = make(map[int64]cache)
+		for clientId, cache := range kv.ClientTbl {
+			if _, ok := args.Shards[cache.Op.getShard()]; ok {
+				args.ClientTbl[clientId] = cache
+			}
 		}
 
 		args.ConfigNum = kv.Config.Num // update args.ConfigNum to reflect my group's current configNum
@@ -458,21 +514,36 @@ func (kv *ShardKV) migrateShards(gid int) {
 				break
 			}
 			if reply.Err == OK {
+				// migration done, start raft consensus to let group know it and update MigrateOut
+				reply.Accepted = args.Shards.toShardSet()
+				_, _, isLeader := kv.rf.Start(Op{Payload: *reply})
+
 				r := "OK"
-				if !args.Shards.toSet().Equal(reply.Installed) {
+				if !args.Shards.toShardSet().Equal(reply.Installed) {
 					r = fmt.Sprintf("I%v", reply.Installed)
 				}
-				lablog.ShardDebug(kv.gid, kv.me, lablog.Info, "CM->G%d %v, %s", gid, args.Shards, r)
-
-				// migration done, start raft consensus to let group know it and update MigrateOut
-				reply.Accepted = args.Shards.toSet()
-				kv.rf.Start(Op{Payload: *reply})
+				if !isLeader {
+					r += " BUT NOT LEADER"
+				}
+				lablog.ShardDebug(kv.gid, kv.me, lablog.Log2, "CM->G%d %v, %s", gid, args.Shards, r)
 				return
 			}
 		}
 
 		// migration not done in this turn, wait a while and retry this group
 		time.Sleep(serverWaitAndRetryInterval * time.Millisecond)
+	}
+}
+
+// The shardsMigrator go routine act as a long-run goroutine to migrate shards for ONE group,
+// it is created when my group try to migrate shards to this group at first time,
+// and upon receiving trigger signal, call MigrateShards RPC to this group
+func (kv *ShardKV) shardsMigrator(gid int, trigger <-chan bool) {
+	for !kv.killed() {
+		if _, ok := <-trigger; !ok {
+			return
+		}
+		kv.migrateShards(gid)
 	}
 }
 
@@ -537,6 +608,7 @@ func StartServer(
 	labgob.Register(PutAppendArgs{})
 	labgob.Register(MigrateShardsArgs{})
 	labgob.Register(MigrateShardsReply{})
+	labgob.Register(cache{})
 	labgob.Register(set{})
 
 	kv := new(ShardKV)
@@ -551,9 +623,10 @@ func StartServer(
 	kv.appliedCommandIndex = kv.rf.LastIncludedIndex
 	kv.commandTbl = make(map[int]commandEntry)
 	kv.configFetcherTrigger = make(chan bool, 1)
+	kv.migrationTrigger = make(chan bool, 1)
 
 	kv.Tbl = shards{}
-	kv.ClientTbl = make(map[int64]applyResult)
+	kv.ClientTbl = make(map[int64]cache)
 	kv.ClientId = labutil.Nrand()
 	kv.OpId = 1
 	kv.Config = shardctrler.Config{Num: 0}
@@ -564,81 +637,23 @@ func StartServer(
 	// initialize from snapshot persisted before a crash
 	kv.readSnapshot(persister.ReadSnapshot())
 
-	// create MigrationTrigger for each group
-	for gid, group := range kv.Cluster {
-		group.MigrationTrigger = make(chan bool, 1)
-		go kv.shardsMigrator(gid, group.MigrationTrigger)
-	}
-	// trigger any MigrateOut
-	kv.triggerMigrationForEachGroup()
-
 	// communication between applier and snapshoter,
 	// let applier trigger snapshoter to take a snapshot when certain amount of msgs have been applied
 	snapshotTrigger := make(chan bool, 1)
-
 	go kv.applier(applyCh, snapshotTrigger, kv.appliedCommandIndex)
+	go kv.snapshoter(persister, snapshotTrigger)
+
+	go kv.migrator(kv.migrationTrigger)
+	kv.triggerMigration() // trigger any pending migration if remain in snapshot
 
 	go kv.configFetcher(kv.configFetcherTrigger)
 	kv.triggerConfigFetch() // trigger very first time config fetch
 
-	go kv.snapshoter(persister, snapshotTrigger)
-
+	lablog.ShardDebug(kv.gid, kv.me, lablog.Log, "ShardKV %d#%d", kv.ClientId%100, kv.OpId)
 	return kv
 }
 
-// after shard config updated, compare oldConfig with newly updated config,
-// add shards that need to migrate out from my group,
-// with mutex held
-func (kv *ShardKV) updateMigrateOut(oldConfig shardctrler.Config) {
-	if oldConfig.Num <= 0 {
-		return
-	}
-
-	for shard, oldGid := range oldConfig.Shards {
-		if newGid := kv.Config.Shards[shard]; oldGid == kv.gid && newGid != kv.gid {
-			// shard in my group of oldConfig, but not in my group of current config, so need to migrate out
-
-			// move this shard into migration, and remove from my group's shards
-			kv.MigrateOut[shard] = shardData{Gid: newGid, ConfigNum: kv.Config.Num, Data: kv.Tbl[shard].Data}
-			delete(kv.Tbl, shard)
-		}
-	}
-
-	if _, isLeader := kv.rf.GetState(); isLeader {
-		lablog.ShardDebug(kv.gid, kv.me, lablog.Trace, "U MO %v", kv.MigrateOut.ByGroup())
-	}
-}
-
-// after shard config updated, compare oldConfig with newly updated config,
-// add shards that my group is waiting for migration data in,
-// with mutex held
-func (kv *ShardKV) updateWaitIn(oldConfig shardctrler.Config) {
-	if oldConfig.Num <= 0 {
-		return
-	}
-
-	for shard, oldGid := range oldConfig.Shards {
-		if newGid := kv.Config.Shards[shard]; oldGid != kv.gid && newGid == kv.gid {
-			// shard not in my group of oldConfig, but in my group of current config, so need to wait migration in
-
-			if !kv.isInWaitIn(shard) {
-				// shard has not reached in prior, so my group need to wait this shard
-				kv.WaitIn[shard] = shardData{Gid: newGid, ConfigNum: kv.Config.Num, Data: nil}
-			} else if in, ok := kv.WaitIn[shard]; ok && in.ConfigNum == kv.Config.Num {
-				// shard has reached before my group is aware of the shard config change,
-				// so when my group know this shard config change,
-				// my group can happily accept this shard and install into my kvTable
-				kv.Tbl[shard] = shardData{Gid: kv.gid, ConfigNum: kv.Config.Num, Data: in.Copy().Data}
-				delete(kv.WaitIn, shard)
-			}
-		}
-	}
-
-	if _, isLeader := kv.rf.GetState(); isLeader {
-		lablog.ShardDebug(kv.gid, kv.me, lablog.Trace, "U WI %v", kv.WaitIn.ByGroup())
-	}
-}
-
+// learn about new servers for each group, with mutex held
 func (kv *ShardKV) updateCluster() {
 	for gid, servers := range kv.Config.Groups {
 		if _, ok := kv.Cluster[gid]; !ok {
@@ -651,20 +666,89 @@ func (kv *ShardKV) updateCluster() {
 	// TODO: update ownership of each shard
 }
 
+// compare oldConfig with newConfig, reply whether this newConfig can be installed or not
+// add shards that need to migrate out from my group,
+// add shards that my group is waiting for migration data in,
+// with mutex held
+func (kv *ShardKV) updateMigrateOutAndWaitIn(oldConfig, newConfig shardctrler.Config) bool {
+	if oldConfig.Num <= 0 {
+		return true
+	}
+
+	addedMigrateOut, addedWaitIn := shards{}, shards{}
+	for shard, oldGid := range oldConfig.Shards {
+		newGid := newConfig.Shards[shard]
+
+		out, outOk := kv.MigrateOut[shard]
+		if oldGid == kv.gid && newGid != kv.gid {
+			// shard in my group of oldConfig, but not in my group of newConfig,
+			// so need to migrate out
+			switch {
+			case !outOk:
+				// move this shard into migration
+				addedMigrateOut[shard] = shardData{Gid: newGid, ConfigNum: newConfig.Num, Data: kv.Tbl[shard].Data}
+			default:
+				// there is a migrate-out existing for the same shard, don't update shard config
+				return false
+			}
+		}
+
+		in, inOk := kv.WaitIn[shard]
+		if oldGid != kv.gid && newGid == kv.gid {
+			// shard not in my group of oldConfig, but in my group of current config,
+			// so need to wait in
+			switch {
+			case !inOk:
+				// shard has not reached before, so my group need to wait this shard
+				addedWaitIn[shard] = shardData{Gid: kv.gid, ConfigNum: newConfig.Num, Data: nil}
+			case outOk && in.ConfigNum < out.ConfigNum:
+				// this shard is already waited-in, and need to migrate out after migrate in,
+				// so in order to not mess this wait-in -> migrate-out order,
+				// don't update shard config
+				return false
+			case in.ConfigNum == newConfig.Num && in.Gid == kv.gid:
+				// in this new config, this shard should be in my group
+			default:
+				lablog.ShardDebug(kv.gid, kv.me, lablog.Error, "UWI %d%v", shard, in)
+				panic(shard)
+			}
+		}
+	}
+
+	// check passed, can update shard config
+
+	// add to MigrateOut, remove from my group's shards
+	for shard, out := range addedMigrateOut {
+		kv.MigrateOut[shard] = out
+		delete(kv.Tbl, shard)
+	}
+	// add to WaitIn
+	for shard, in := range addedWaitIn {
+		kv.WaitIn[shard] = in
+	}
+	for shard, in := range kv.WaitIn {
+		if in.Data != nil && in.ConfigNum == newConfig.Num && in.Gid == kv.gid {
+			// shard has reached before my group is aware of the shard config change,
+			// so when my group know this shard config change,
+			// my group can happily accept this shard and install into my shards
+			kv.Tbl[shard] = in.Copy()
+			delete(kv.WaitIn, shard)
+		}
+	}
+	return true
+}
+
 // update my group's shard config, (it's the ONLY place where shard config can be updated)
-// and if leader, try to migrate shards out,
+// and if leader, migrate shards out,
 // with mutex held
 func (kv *ShardKV) installConfig(config shardctrler.Config) {
-	if config.Num <= kv.Config.Num {
+	if config.Num <= kv.Config.Num || !kv.updateMigrateOutAndWaitIn(kv.Config, config) {
 		// outdated config, ignore it
+		// or cannot update MigrateOut or WaitIn, so abort installing config
 		return
 	}
 
-	oldConfig := kv.Config
 	kv.Config = config
-
-	kv.updateMigrateOut(oldConfig)
-	kv.updateWaitIn(oldConfig)
 	kv.updateCluster()
 
 	if _, isLeader := kv.rf.GetState(); !isLeader {
@@ -672,31 +756,39 @@ func (kv *ShardKV) installConfig(config shardctrler.Config) {
 		return
 	}
 
-	lablog.ShardDebug(kv.gid, kv.me, lablog.Ctrler, "Ins C%d->%d", oldConfig.Num, config.Num)
+	lablog.ShardDebug(kv.gid, kv.me, lablog.Trace, "CN->%d MO %v,WI %v", config.Num, kv.MigrateOut.ByGroup(), kv.WaitIn.ByGroup())
 
 	// trigger fetcher to see if any newer config, in order to update my shard config ASAP
 	kv.triggerConfigFetch()
-	// trigger any MigrateOut
-	kv.triggerMigrationForEachGroup()
+	// trigger migration for each group
+	kv.triggerMigration()
 }
 
 // apply Get RPC request, with mutex held
-func (kv *ShardKV) applyGetArgs(args *GetArgs) (r string, e Err) {
-	// TODO: wait in ?
+func (kv *ShardKV) applyGetArgs(args *GetArgs) applyResult {
 	shard := key2shard(args.Key)
 	if !kv.shouldServeShard(shard) {
-		return "", ErrWrongGroup
+		return applyResult{Err: ErrWrongGroup, Value: ""}
 	}
-	return kv.Tbl[shard].Data[args.Key], OK
+	// TODO: wait in ?
+	// if kv.isInWaitIn(shard) {
+	// 	return "", ErrInMigration
+	// }
+
+	return applyResult{Err: OK, Value: kv.Tbl[shard].Data[args.Key]}
 }
 
 // apply PutAppend RPC request, with mutex held
-func (kv *ShardKV) applyPutAppendArgs(args *PutAppendArgs) (r interface{}, e Err) {
-	// TODO: wait in ?
+func (kv *ShardKV) applyPutAppendArgs(args *PutAppendArgs) applyResult {
 	shard := key2shard(args.Key)
 	if !kv.shouldServeShard(shard) {
-		return nil, ErrWrongGroup
+		return applyResult{Err: ErrWrongGroup, Value: nil}
 	}
+	// TODO: wait in ?
+	// if kv.isInWaitIn(shard) {
+	// 	return nil, ErrInMigration
+	// }
+
 	if _, ok := kv.Tbl[shard]; !ok {
 		kv.Tbl[shard] = shardData{Gid: kv.gid, ConfigNum: kv.Config.Num, Data: kvTable{}}
 	}
@@ -705,69 +797,90 @@ func (kv *ShardKV) applyPutAppendArgs(args *PutAppendArgs) (r interface{}, e Err
 	} else {
 		kv.Tbl[shard].Data[args.Key] += args.Value
 	}
-	return nil, OK
+	return applyResult{Err: OK, Value: nil}
 }
 
 // migration request accepted, install shards' data from this migration, with mutex held
-func (kv *ShardKV) applyMigrateShardsArgs(args *MigrateShardsArgs) (r set, e Err) {
-	e = OK
+func (kv *ShardKV) applyMigrateShardsArgs(args *MigrateShardsArgs) applyResult {
 	// reply to caller with set of installed shards
-	r = set{}
-	// groups that need to trigger migration
-	migrateOutGroups := set{}
+	installed := set{}
 
 	for shard, migration := range args.Shards {
-		if migration.ConfigNum > kv.Config.Num {
+		switch in, inOk := kv.WaitIn[shard]; {
+		case migration.ConfigNum > kv.Config.Num:
 			// migration shard reaches before my group is aware of the shard config change,
 			// and my group trusts the migration source group,
 			// believing this migration shard will be needed in the future config,
 			// so accept this migration shard, store it into my WaitIn
 			kv.WaitIn[shard] = migration
-		}
-
-		if in, ok := kv.WaitIn[shard]; ok && migration.ConfigNum == in.ConfigNum {
+		case !inOk:
+			// migration already accepted, and wait-in of this shard is deleted
+			continue
+		case migration.ConfigNum == in.ConfigNum:
 			// migration shard matches the same shard in my group's WaitIn,
-			// they are of the same shard config, so my group should accept this migration shard
+			// and they are of the same shard config, so my group should accept this migration shard
 
-			if out, ok := kv.MigrateOut[shard]; ok && out.ConfigNum > in.ConfigNum {
+			switch out, outOk := kv.MigrateOut[shard]; {
+			case kv.shouldServeShard(shard):
+				// my group should serve request for this shard, so install shard into my group's kvTable
+				kv.Tbl[shard] = shardData{Gid: kv.gid, ConfigNum: kv.Config.Num, Data: migration.Copy().Data}
+				// remove shard from my group's WaitIn
+				delete(kv.WaitIn, shard)
+				// tell caller this shard is installed to my group
+				installed[shard] = true
+			case !outOk:
+				// no need to migrate out at this shard config, but will migrate out at later shard config
+			case out.ConfigNum > in.ConfigNum:
 				// this migration shard need to migrate out, so no need to install into my group's shards,
 				// instead, move this migration shard to MigrateOut
 				kv.MigrateOut[shard] = shardData{Gid: out.Gid, ConfigNum: out.ConfigNum, Data: migration.Data}
-				migrateOutGroups[out.Gid] = true
-				delete(kv.WaitIn, shard) // remove shard from my group's WaitIn
-				r[shard] = true          // tell caller this shard is installed to my group
-			} else if kv.shouldServeShard(shard) {
-				// my group should serve request for this shard, so install shard into my group's kvTable
-				kv.Tbl[shard] = shardData{Gid: kv.gid, ConfigNum: kv.Config.Num, Data: migration.Copy().Data}
-				delete(kv.WaitIn, shard) // remove shard from my group's WaitIn
-				r[shard] = true          // tell caller this shard is installed to my group
+				// remove shard from my group's WaitIn
+				delete(kv.WaitIn, shard)
+				// tell caller this shard is installed to my group
+				installed[shard] = true
+			default:
+				lablog.ShardDebug(kv.gid, kv.me, lablog.Error, "HMI G%d-> %v, inner default %d%v", args.FromGid, args.Shards, shard, in)
+				panic(shard)
 			}
+
+		case migration.ConfigNum < in.ConfigNum:
+			// migration not match wait-in, maybe arrive late
+			installed[shard] = true
+		default:
+			lablog.ShardDebug(kv.gid, kv.me, lablog.Error, "HMI G%d-> %v, outer default %d%v", args.FromGid, args.Shards, shard, in)
+			panic(shard)
+		}
+	}
+
+	// also install client request cache for these shards
+	for clientId, cache := range args.ClientTbl {
+		kv.ClientTbl[clientId] = cache
+	}
+
+	if _, isLeader := kv.rf.GetState(); isLeader {
+		lablog.ShardDebug(kv.gid, kv.me, lablog.Trace, "HMI MO %v,WI %v", kv.MigrateOut.ByGroup(), kv.WaitIn.ByGroup())
+
+		// MigrateOut updated, trigger migration
+		kv.triggerMigration()
+	}
+
+	return applyResult{Err: OK, Value: installed}
+}
+
+// migration done, remove shard from my group's MigrateOut, with mutex held
+func (kv *ShardKV) applyMigrateShardsReply(reply *MigrateShardsReply) {
+	for shard, out := range kv.MigrateOut {
+		if out.Gid == reply.Gid && reply.Accepted[shard] {
+			// migration target group accepted this shard, so remove from my group's MigrateOut
+			delete(kv.MigrateOut, shard)
 		}
 	}
 
 	if _, isLeader := kv.rf.GetState(); !isLeader {
 		return
 	}
-	lablog.ShardDebug(kv.gid, kv.me, lablog.Trace, "A WI %v", kv.WaitIn.ByGroup())
 
-	for gid := range migrateOutGroups {
-		kv.triggerMigration(gid)
-	}
-	return
-}
-
-// migration done, remove shard from my group's MigrateOut, with mutex held
-func (kv *ShardKV) applyMigrateShardsReply(reply *MigrateShardsReply) {
-	for shard, out := range kv.MigrateOut {
-		if reply.FromGid == out.Gid && reply.Accepted[shard] {
-			// migration target group accepted this shard, so remove from my group's MigrateOut
-			delete(kv.MigrateOut, shard)
-		}
-	}
-
-	if _, isLeader := kv.rf.GetState(); isLeader {
-		lablog.ShardDebug(kv.gid, kv.me, lablog.Trace, "R MO %v", kv.MigrateOut.ByGroup())
-	}
+	lablog.ShardDebug(kv.gid, kv.me, lablog.Trace, "AMO MO %v,WI %v", kv.MigrateOut.ByGroup(), kv.WaitIn.ByGroup())
 }
 
 // The applier go routine accept applyMsg from applyCh (from underlying raft),
@@ -775,11 +888,6 @@ func (kv *ShardKV) applyMigrateShardsReply(reply *MigrateShardsReply) {
 // reply modified result back to KVServer's RPC handler, if any, through channel identified by commandIndex
 // after every snapshoterAppliedMsgInterval msgs, trigger a snapshot
 func (kv *ShardKV) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger chan<- bool, lastSnapshoterTriggeredCommandIndex int) {
-	var r interface{}
-	var e Err
-	var clientId int64
-	var opId int
-
 	for m := range applyCh {
 		if m.SnapshotValid {
 			// is snapshot, reset kv server state according to this snapshot
@@ -825,24 +933,25 @@ func (kv *ShardKV) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger chan<- 
 			continue
 		}
 
-		clientId, opId = op.getClientIdAndOpId()
-
-		if lastOpResult, ok := kv.ClientTbl[clientId]; ok && lastOpResult.OpId >= opId {
+		var result applyResult
+		clientId, opId := op.getClientId(), op.getOpId()
+		if lastOpCache, ok := kv.ClientTbl[clientId]; ok && lastOpCache.Op.getOpId() >= opId {
 			// detect duplicated operation
 			// reply with cached result, don't update kv table
-			r, e = lastOpResult.Value, lastOpResult.Err
+			result = lastOpCache.Result
+			lablog.ShardDebug(kv.gid, kv.me, lablog.Log2, "HIT %v@%d, r:%v, e:%v, LOPID:%d, COPID:%d", op, m.CommandIndex, result.Value, result.Err, lastOpCache.Op.getOpId(), opId)
 		} else {
 			switch payload := op.Payload.(type) {
 			case GetArgs:
-				r, e = kv.applyGetArgs(&payload)
+				result = kv.applyGetArgs(&payload)
 			case PutAppendArgs:
-				r, e = kv.applyPutAppendArgs(&payload)
+				result = kv.applyPutAppendArgs(&payload)
 			case MigrateShardsArgs:
-				r, e = kv.applyMigrateShardsArgs(&payload)
+				result = kv.applyMigrateShardsArgs(&payload)
 			}
 
 			// cache operation result
-			kv.ClientTbl[clientId] = applyResult{Err: e, Value: r, OpId: opId}
+			kv.ClientTbl[clientId] = cache{Op: op, Result: result}
 		}
 
 		ce, ok := kv.commandTbl[m.CommandIndex]
@@ -853,7 +962,7 @@ func (kv *ShardKV) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger chan<- 
 
 		// only leader server maintains commandTbl, followers just apply kv modification
 		if ok {
-			if ceClientId, ceOpId := ce.op.getClientIdAndOpId(); ceClientId != clientId || ceOpId != opId {
+			if ce.op.getClientId() != clientId || ce.op.getOpId() != opId {
 				// Your solution needs to handle a leader that has called Start() for a Clerk's RPC,
 				// but loses its leadership before the request is committed to the log.
 				// In this case you should arrange for the Clerk to re-send the request to other servers
@@ -863,13 +972,13 @@ func (kv *ShardKV) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger chan<- 
 				// by noticing that a different request has appeared at the index returned by Start()
 				ce.replyCh <- applyResult{Err: ErrWrongLeader}
 			} else {
-				switch result := r.(type) {
+				switch r := result.Value.(type) {
 				case string: // Get
 				case nil: // PutAppend
 				case set: // MigrateShards
-					lablog.ShardDebug(kv.gid, kv.me, lablog.Migrate, "Done %v@%d %v", op, m.CommandIndex, result)
+					lablog.ShardDebug(kv.gid, kv.me, lablog.Migrate, "Done %v@%d %v", op, m.CommandIndex, r)
 				}
-				ce.replyCh <- applyResult{Err: e, Value: r}
+				ce.replyCh <- result
 			}
 		}
 	}
@@ -880,9 +989,62 @@ func (kv *ShardKV) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger chan<- 
 	for _, ce := range kv.commandTbl {
 		close(ce.replyCh)
 	}
+}
+
+// trigger migrator
+func (kv *ShardKV) triggerMigration() {
+	select {
+	case kv.migrationTrigger <- true:
+	default:
+	}
+}
+
+// The migrator go routine check my group's MigrateOut,
+// if any shards need to migrate out, trigger the corresponding shardsMigrator of that group
+func (kv *ShardKV) migrator(trigger <-chan bool) {
+	for !kv.killed() {
+		select {
+		case _, ok := <-trigger:
+			if !ok {
+				return
+			}
+		case <-time.After(migratorInterval * time.Millisecond):
+			if kv.killed() {
+				return
+			}
+		}
+
+		if _, isLeader := kv.rf.GetState(); !isLeader {
+			// only leader should migrate shards out
+			continue
+		}
+
+		kv.mu.Lock()
+		for gid := range kv.MigrateOut.toGroupSet() {
+			// create new shardsMigrator for this group if not started
+			switch group, ok := kv.Cluster[gid]; {
+			case !ok:
+				kv.Cluster[gid] = &groupInfo{Leader: 0, Servers: nil, MigrationTrigger: make(chan bool, 1)}
+				go kv.shardsMigrator(gid, kv.Cluster[gid].MigrationTrigger)
+			case group.MigrationTrigger == nil:
+				group.MigrationTrigger = make(chan bool, 1)
+				go kv.shardsMigrator(gid, kv.Cluster[gid].MigrationTrigger)
+			}
+
+			// trigger shards migration for this group
+			select {
+			case kv.Cluster[gid].MigrationTrigger <- true:
+			default:
+			}
+		}
+		kv.mu.Unlock()
+	}
+
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
 	// close trigger of each group to avoid goroutine resource leak
 	for _, groupInfo := range kv.Cluster {
-		if groupInfo.MigrationTrigger != nil {
+		if groupInfo.MigrationTrigger != nil { // TODO: close of nil channel
 			close(groupInfo.MigrationTrigger)
 		}
 	}
@@ -896,7 +1058,7 @@ func (kv *ShardKV) triggerConfigFetch() {
 	}
 }
 
-// The configFetcher go routine periodically poll the shardctrler,
+// The configFetcher go routine polls the shardctrler,
 // to learn about new configurations
 func (kv *ShardKV) configFetcher(trigger <-chan bool) {
 	for !kv.killed() {
@@ -908,6 +1070,9 @@ func (kv *ShardKV) configFetcher(trigger <-chan bool) {
 				return
 			}
 		case <-time.After(serverRefreshConfigInterval * time.Millisecond):
+			if kv.killed() {
+				return
+			}
 		}
 
 		if _, isLeader := kv.rf.GetState(); !isLeader {
@@ -990,7 +1155,7 @@ func (kv *ShardKV) readSnapshot(data []byte) {
 	r := bytes.NewBuffer(data)
 	d := labgob.NewDecoder(r)
 	var tbl shards
-	var clientTbl map[int64]applyResult
+	var clientTbl map[int64]cache
 	var clientId int64
 	var opId int
 	var config shardctrler.Config

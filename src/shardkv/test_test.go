@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"6.824/lablog"
+	"6.824/labutil"
 	"6.824/models"
 	"6.824/porcupine"
 )
@@ -19,7 +21,7 @@ const linearizabilityCheckTimeout = 1 * time.Second
 func check(t *testing.T, ck *Clerk, key string, value string) {
 	v := ck.Get(key)
 	if v != value {
-		t.Fatalf("Get(%v@S%d): expected:\n%v\nreceived:\n%v", key, key2shard(key), value, v)
+		t.Fatalf("Get(%v@G%d %d%s %d#%d): expected: %d, received: %d\n%v\nreceived:\n%v", key, ck.config.Shards[key2shard(key)], key2shard(key), labutil.ToSubscript(ck.config.Num), ck.me%100, ck.opId, len(value), len(v), value, v)
 	}
 }
 
@@ -117,27 +119,33 @@ func TestJoinLeave(t *testing.T) {
 		va[i] = randstring(5)
 		ck.Put(ka[i], va[i])
 	}
+	lablog.ShardDebug(0, 0, lablog.Test, "To check 5 at C%d", ck.config.Num)
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 	}
+	lablog.ShardDebug(0, 0, lablog.Test, "Done check value length 5 at C%d", ck.config.Num)
 
 	cfg.join(1)
 
+	lablog.ShardDebug(0, 0, lablog.Test, "To check 5 and append to 10 at C%d", ck.config.Num)
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 		x := randstring(5)
 		ck.Append(ka[i], x)
 		va[i] += x
 	}
+	lablog.ShardDebug(0, 0, lablog.Test, "Done append to value length 10 at C%d", ck.config.Num)
 
 	cfg.leave(0)
 
+	lablog.ShardDebug(0, 0, lablog.Test, "To check 10 and append to 15 at C%d", ck.config.Num)
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 		x := randstring(5)
 		ck.Append(ka[i], x)
 		va[i] += x
 	}
+	lablog.ShardDebug(0, 0, lablog.Test, "Done append to value length 15 at C%d", ck.config.Num)
 
 	// allow time for shards to transfer.
 	time.Sleep(1 * time.Second)
@@ -145,9 +153,11 @@ func TestJoinLeave(t *testing.T) {
 	cfg.checklogs()
 	cfg.ShutdownGroup(0)
 
+	lablog.ShardDebug(0, 0, lablog.Test, "To check 15 at C%d", ck.config.Num)
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 	}
+	lablog.ShardDebug(0, 0, lablog.Test, "Done check value length 15 at C%d", ck.config.Num)
 
 	fmt.Printf("  ... Passed\n")
 }
@@ -160,7 +170,7 @@ func TestSnapshot(t *testing.T) {
 
 	ck := cfg.makeClient()
 
-	cfg.join(0)
+	cfg.join(0) // C1 G100: [0 1 2 3 4 5 6 7 8 9]
 
 	n := 30
 	ka := make([]string, n)
@@ -174,9 +184,9 @@ func TestSnapshot(t *testing.T) {
 		check(t, ck, ka[i], va[i])
 	}
 
-	cfg.join(1)
-	cfg.join(2)
-	cfg.leave(0)
+	cfg.join(1)  // C2 G100: [5 6 7 8 9], G101: [0 1 2 3 4]
+	cfg.join(2)  // C3 G100: [6 7 8 9], G101: [2 3 4], G102: [0 1 5]
+	cfg.leave(0) // C4 G101: [2 3 4 6 8], G102: [0 1 5 7 9]
 
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
@@ -185,8 +195,8 @@ func TestSnapshot(t *testing.T) {
 		va[i] += x
 	}
 
-	cfg.leave(1)
-	cfg.join(0)
+	cfg.leave(1) // C5 G102: [0 1 2 3 4 5 6 7 8 9]
+	cfg.join(0)  // C6 G100: [0 1 2 3 4], G102: [5 6 7 8 9]
 
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
@@ -228,7 +238,7 @@ func TestMissChange(t *testing.T) {
 
 	ck := cfg.makeClient()
 
-	cfg.join(0)
+	cfg.join(0) // C1 G100: [0 1 2 3 4 5 6 7 8 9]
 
 	n := 10
 	ka := make([]string, n)
@@ -238,46 +248,53 @@ func TestMissChange(t *testing.T) {
 		va[i] = randstring(20)
 		ck.Put(ka[i], va[i])
 	}
+	lablog.ShardDebug(0, 0, lablog.Test, "To check 20 at C%d", ck.config.Num)
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 	}
-
-	cfg.join(1)
+	lablog.ShardDebug(0, 0, lablog.Test, "Done check value length 20 at C%d", ck.config.Num)
+	cfg.join(1) // C2 G100: [5 6 7 8 9], G101: [0 1 2 3 4]
 
 	cfg.ShutdownServer(0, 0)
 	cfg.ShutdownServer(1, 0)
 	cfg.ShutdownServer(2, 0)
 
-	cfg.join(2)
-	cfg.leave(1)
-	cfg.leave(0)
+	cfg.join(2)  // C3: G100: [6 7 8 9], G101: [2 3 4], G102: [0 1 5]
+	cfg.leave(1) // C4: G100: [3 6 7 8 9], G102: [0 1 2 4 5]
+	cfg.leave(0) // C5: G102: [0 1 2 3 4 5 6 7 8 9]
 
+	lablog.ShardDebug(0, 0, lablog.Test, "To check 20 and append to 40 at C%d", ck.config.Num)
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 		x := randstring(20)
 		ck.Append(ka[i], x)
 		va[i] += x
 	}
+	lablog.ShardDebug(0, 0, lablog.Test, "Done append to value length 40 at C%d", ck.config.Num)
 
-	cfg.join(1)
+	cfg.join(1) // C6: G101: [0 1 2 3 4], G102: [5 6 7 8 9]
 
+	lablog.ShardDebug(0, 0, lablog.Test, "To check 40 and append to 60 at C%d", ck.config.Num)
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 		x := randstring(20)
 		ck.Append(ka[i], x)
 		va[i] += x
 	}
+	lablog.ShardDebug(0, 0, lablog.Test, "Done append to value length 60 at C%d", ck.config.Num)
 
 	cfg.StartServer(0, 0)
 	cfg.StartServer(1, 0)
 	cfg.StartServer(2, 0)
 
+	lablog.ShardDebug(0, 0, lablog.Test, "To check 60 and append to 80 at C%d", ck.config.Num)
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 		x := randstring(20)
 		ck.Append(ka[i], x)
 		va[i] += x
 	}
+	lablog.ShardDebug(0, 0, lablog.Test, "Done append to value length 80 at C%d", ck.config.Num)
 
 	time.Sleep(2 * time.Second)
 
@@ -285,23 +302,27 @@ func TestMissChange(t *testing.T) {
 	cfg.ShutdownServer(1, 1)
 	cfg.ShutdownServer(2, 1)
 
-	cfg.join(0)
-	cfg.leave(2)
+	cfg.join(0)  // C7: G100: [0 5 6], G101: [1 2 3 4], G102: [7 8 9]
+	cfg.leave(2) // C8: G100: [0 5 6 7 9], G101: [1 2 3 4 8]
 
+	lablog.ShardDebug(0, 0, lablog.Test, "To check 80 and append to 100 at C%d", ck.config.Num)
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 		x := randstring(20)
 		ck.Append(ka[i], x)
 		va[i] += x
 	}
+	lablog.ShardDebug(0, 0, lablog.Test, "Done append to value length 100 at C%d", ck.config.Num)
 
 	cfg.StartServer(0, 1)
 	cfg.StartServer(1, 1)
 	cfg.StartServer(2, 1)
 
+	lablog.ShardDebug(0, 0, lablog.Test, "To check 100 at C%d", ck.config.Num)
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 	}
+	lablog.ShardDebug(0, 0, lablog.Test, "Done check value length 100 at C%d", ck.config.Num)
 
 	fmt.Printf("  ... Passed\n")
 }

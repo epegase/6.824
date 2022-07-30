@@ -39,6 +39,10 @@ const (
 	// server reply when it is "dead" or going to down (Raft not functional),
 	// client should retry for another server in this group
 	ErrShutdown Err = "ErrShutdown"
+	// server reply when it is in the very fist election, no leader elected,
+	// client should wait for a while and retry to the same server,
+	// hoping this time election is done
+	ErrInitElection Err = "ErrInitElection"
 	// server reply when its shard config is newer than request's,
 	// client should update its shard config from shardctrler
 	ErrOutdatedConfig Err = "ErrOutdatedConfig"
@@ -90,8 +94,9 @@ type GetReply struct {
 }
 
 type MigrateShardsArgs struct {
-	FromGid int    // gid that send this request
-	Shards  shards // migration shards
+	FromGid   int             // gid that send this request
+	Shards    shards          // migration shards
+	ClientTbl map[int64]cache // client request cache for these shards
 
 	ClientId  int64 // id of client
 	OpId      int   // client operation id
@@ -99,8 +104,8 @@ type MigrateShardsArgs struct {
 }
 
 type MigrateShardsReply struct {
-	Err     Err
-	FromGid int // gid that send this reply
+	Err Err
+	Gid int // gid that send this reply
 
 	// TODO: debug
 	Installed set // installed shards set
