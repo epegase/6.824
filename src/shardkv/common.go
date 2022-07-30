@@ -57,6 +57,13 @@ const (
 	ErrInMigration Err = "ErrInMigration"
 )
 
+type ClerkRequest interface {
+	getClientId() int64
+	getOpId() int
+	getShard() int
+	getConfigNum() int
+}
+
 type opType string
 
 const (
@@ -76,6 +83,19 @@ type PutAppendArgs struct {
 	ConfigNum int   // num of client's shard config
 }
 
+func (args PutAppendArgs) getClientId() int64 {
+	return args.ClientId
+}
+func (args PutAppendArgs) getOpId() int {
+	return args.OpId
+}
+func (args PutAppendArgs) getShard() int {
+	return key2shard(args.Key)
+}
+func (args PutAppendArgs) getConfigNum() int {
+	return args.ConfigNum
+}
+
 type PutAppendReply struct {
 	Err Err
 }
@@ -88,6 +108,19 @@ type GetArgs struct {
 	ConfigNum int   // num of client's shard config
 }
 
+func (args GetArgs) getClientId() int64 {
+	return args.ClientId
+}
+func (args GetArgs) getOpId() int {
+	return args.OpId
+}
+func (args GetArgs) getShard() int {
+	return key2shard(args.Key)
+}
+func (args GetArgs) getConfigNum() int {
+	return args.ConfigNum
+}
+
 type GetReply struct {
 	Err   Err
 	Value string
@@ -98,9 +131,7 @@ type MigrateShardsArgs struct {
 	Shards    shards          // migration shards
 	ClientTbl map[int64]cache // client request cache for these shards
 
-	ClientId  int64 // id of client
-	OpId      int   // client operation id
-	ConfigNum int   // num of client's shard config
+	ConfigNum int // num of client's shard config
 }
 
 type MigrateShardsReply struct {
