@@ -1,0 +1,23 @@
+Run as `./dstest -p24 -n128 -r -u TestUnreliable3 --gobin /home/soros/go/bin/go1.19beta1`
+
+Running with the race detector
+Running with 24 workers / 8 CPU cores available
+Running on CPU model: Intel(R) Core(TM) i5-8259U CPU @ 2.30GHz
+Running with go version go1.19beta1 linux/amd64
+
+┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ Test             ┃ Failed ┃ Total ┃         Time ┃
+┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
+│ TestStaticShards │      0 │   128 │  7.85 ± 0.54 │
+│ TestJoinLeave    │      0 │   128 │  7.26 ± 0.62 │
+│ TestSnapshot     │      0 │   128 │ 11.47 ± 0.73 │
+│ TestMissChange   │      0 │   128 │ 11.43 ± 0.91 │
+│ TestConcurrent1  │      0 │   128 │  9.35 ± 0.60 │
+│ TestConcurrent2  │      0 │   128 │ 19.27 ± 0.72 │
+│ TestConcurrent3  │      0 │   128 │ 20.12 ± 0.90 │
+│ TestUnreliable1  │      0 │   128 │ 11.78 ± 1.04 │
+│ TestUnreliable2  │      0 │   128 │ 11.46 ± 0.84 │
+│ TestUnreliable3  │      0 │   128 │ 11.16 ± 0.77 │
+└──────────────────┴────────┴───────┴──────────────┘
+
+Completed 128 iterations in total
