@@ -77,7 +77,7 @@ func (op *Op) Equal(another *Op) bool {
 }
 
 // channel message from applier to RPC handler,
-type applyResult struct {
+type requestResult struct {
 	Err   Err
 	Value interface{}
 }
@@ -85,14 +85,14 @@ type applyResult struct {
 // reply channel from applier to RPC handler, of a commandIndex
 type commandEntry struct {
 	op      Op
-	replyCh chan applyResult
+	replyCh chan requestResult
 }
 
 // cached operation result, to respond to duplicated operation
 type cache struct {
 	OpId   int
 	Shard  int
-	Result applyResult
+	Result requestResult
 }
 
 type kvTable map[string]string
@@ -247,6 +247,28 @@ func (kv *ShardKV) isInWaitIn(shard int) bool {
 	return ok
 }
 
+// check if this ClerkRequest is applicable on my group, with mutex held
+func (kv *ShardKV) checkClerkRequest(req ClerkRequest) (result requestResult, applicable bool) {
+	if lastOpCache, ok := kv.ClientTbl[req.getClientId()]; ok && lastOpCache.Result.Err == OK && lastOpCache.OpId >= req.getOpId() {
+		// detect duplicated SUCCESSFUL operation, reply with cached result
+		return lastOpCache.Result, false
+	}
+	if kv.Config.Num > req.getConfigNum() {
+		// request's config is outdated, tell client to update its shard config
+		return requestResult{Err: ErrOutdatedConfig}, false
+	}
+	shard := req.getShard()
+	if kv.Config.Num == 0 || !kv.shouldServeShard(shard) {
+		// no config fetched, or is not responsible for key's shard
+		return requestResult{Err: ErrWrongGroup}, false
+	}
+	if kv.isInWaitIn(shard) {
+		// key's shard is in process of migration
+		return requestResult{Err: ErrInMigration}, false
+	}
+	return result, true
+}
+
 // common logic for RPC handler
 //
 // 1. check not killed
@@ -295,29 +317,9 @@ func (kv *ShardKV) commonHandler(op Op) (e Err, r interface{}) {
 			e = ErrUnknownConfig
 			return
 		}
-		if lastOpCache, ok := kv.ClientTbl[payload.getClientId()]; ok && lastOpCache.OpId >= payload.getOpId() {
-			// early duplication detection, and early return
+		if result, applicable := kv.checkClerkRequest(payload); !applicable {
 			kv.mu.Unlock()
-			r, e = lastOpCache.Result.Value, lastOpCache.Result.Err
-			return
-		}
-		if kv.Config.Num > payload.getConfigNum() {
-			// request's config is outdated, abort request, and tell client to update its shard config
-			kv.mu.Unlock()
-			e = ErrOutdatedConfig
-			return
-		}
-		shard := payload.getShard()
-		if kv.Config.Num == 0 || !kv.shouldServeShard(shard) {
-			// no config fetched, or is not responsible for key's shard
-			kv.mu.Unlock()
-			e = ErrWrongGroup
-			return
-		}
-		if kv.isInWaitIn(shard) {
-			// key's shard is in process of migration
-			kv.mu.Unlock()
-			e = ErrInMigration
+			e, r = result.Err, result.Value
 			return
 		}
 	}
@@ -336,7 +338,7 @@ func (kv *ShardKV) commonHandler(op Op) (e Err, r interface{}) {
 
 	lablog.ShardDebug(kv.gid, kv.me, lablog.Server, "Start %v@%d", op, index)
 
-	c := make(chan applyResult) // reply channel for applier goroutine
+	c := make(chan requestResult) // reply channel for applier goroutine
 	kv.commandTbl[index] = commandEntry{op: op, replyCh: c}
 	kv.mu.Unlock()
 
@@ -608,7 +610,6 @@ func (kv *ShardKV) updateCluster() {
 		}
 		kv.Cluster[gid].Servers = servers
 	}
-	// TODO: update ownership of each shard
 }
 
 // compare oldConfig with newConfig, reply whether this newConfig can be installed or not
@@ -710,30 +711,14 @@ func (kv *ShardKV) installConfig(config shardctrler.Config) {
 }
 
 // apply Get RPC request, with mutex held
-func (kv *ShardKV) applyGetArgs(args *GetArgs) applyResult {
+func (kv *ShardKV) applyGetArgs(args *GetArgs) requestResult {
 	shard := key2shard(args.Key)
-	if !kv.shouldServeShard(shard) {
-		return applyResult{Err: ErrWrongGroup, Value: ""}
-	}
-	// TODO: wait in ?
-	// if kv.isInWaitIn(shard) {
-	// 	return "", ErrInMigration
-	// }
-
-	return applyResult{Err: OK, Value: kv.Tbl[shard].Data[args.Key]}
+	return requestResult{Err: OK, Value: kv.Tbl[shard].Data[args.Key]}
 }
 
 // apply PutAppend RPC request, with mutex held
-func (kv *ShardKV) applyPutAppendArgs(args *PutAppendArgs) applyResult {
+func (kv *ShardKV) applyPutAppendArgs(args *PutAppendArgs) requestResult {
 	shard := key2shard(args.Key)
-	if !kv.shouldServeShard(shard) {
-		return applyResult{Err: ErrWrongGroup, Value: nil}
-	}
-	// TODO: wait in ?
-	// if kv.isInWaitIn(shard) {
-	// 	return nil, ErrInMigration
-	// }
-
 	if _, ok := kv.Tbl[shard]; !ok {
 		kv.Tbl[shard] = shardData{Gid: kv.gid, ConfigNum: kv.Config.Num, Data: kvTable{}}
 	}
@@ -742,11 +727,11 @@ func (kv *ShardKV) applyPutAppendArgs(args *PutAppendArgs) applyResult {
 	} else {
 		kv.Tbl[shard].Data[args.Key] += args.Value
 	}
-	return applyResult{Err: OK, Value: nil}
+	return requestResult{Err: OK, Value: nil}
 }
 
 // migration request accepted, install shards' data from this migration, with mutex held
-func (kv *ShardKV) applyMigrateShardsArgs(args *MigrateShardsArgs) applyResult {
+func (kv *ShardKV) applyMigrateShardsArgs(args *MigrateShardsArgs) requestResult {
 	// reply to caller with set of installed shards
 	installed := set{}
 
@@ -811,7 +796,7 @@ func (kv *ShardKV) applyMigrateShardsArgs(args *MigrateShardsArgs) applyResult {
 		kv.triggerConfigFetch()
 	}
 
-	return applyResult{Err: OK, Value: installed}
+	return requestResult{Err: OK, Value: installed}
 }
 
 // migration done, remove shard from my group's MigrateOut, with mutex held
@@ -854,7 +839,7 @@ func (kv *ShardKV) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger chan<- 
 			kv.readSnapshot(m.Snapshot)
 			// clear all pending reply channel, to avoid goroutine resource leak
 			for _, ce := range kv.commandTbl {
-				ce.replyCh <- applyResult{Err: ErrWrongLeader}
+				ce.replyCh <- requestResult{Err: ErrWrongLeader}
 			}
 			kv.commandTbl = make(map[int]commandEntry)
 			kv.mu.Unlock()
@@ -879,25 +864,20 @@ func (kv *ShardKV) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger chan<- 
 
 		kv.appliedCommandIndex = m.CommandIndex
 
-		var result applyResult
+		var result requestResult
 		switch payload := op.Payload.(type) {
-		case GetArgs:
-			if lastOpCache, ok := kv.ClientTbl[payload.ClientId]; ok && lastOpCache.OpId >= payload.OpId {
-				// detect duplicated operation, reply with cached result
-				result = lastOpCache.Result
+		case ClerkRequest:
+			if r, applicable := kv.checkClerkRequest(payload); !applicable {
+				result = r
 			} else {
-				result = kv.applyGetArgs(&payload)
+				switch args := payload.(type) {
+				case GetArgs:
+					result = kv.applyGetArgs(&args)
+				case PutAppendArgs:
+					result = kv.applyPutAppendArgs(&args)
+				}
 				// cache operation result
-				kv.ClientTbl[payload.ClientId] = cache{OpId: payload.OpId, Shard: key2shard(payload.Key), Result: result}
-			}
-		case PutAppendArgs:
-			if lastOpCache, ok := kv.ClientTbl[payload.ClientId]; ok && lastOpCache.OpId >= payload.OpId {
-				// detect duplicated operation, reply with cached result, don't update kv table
-				result = lastOpCache.Result
-			} else {
-				result = kv.applyPutAppendArgs(&payload)
-				// cache operation result
-				kv.ClientTbl[payload.ClientId] = cache{OpId: payload.OpId, Shard: key2shard(payload.Key), Result: result}
+				kv.ClientTbl[payload.getClientId()] = cache{OpId: payload.getOpId(), Shard: payload.getShard(), Result: result}
 			}
 		case MigrateShardsArgs:
 			result = kv.applyMigrateShardsArgs(&payload)
@@ -927,7 +907,7 @@ func (kv *ShardKV) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger chan<- 
 				//
 				// One way to do this is for the server to detect that it has lost leadership,
 				// by noticing that a different request has appeared at the index returned by Start()
-				ce.replyCh <- applyResult{Err: ErrWrongLeader}
+				ce.replyCh <- requestResult{Err: ErrWrongLeader}
 			} else {
 				switch r := result.Value.(type) {
 				case string: // Get
