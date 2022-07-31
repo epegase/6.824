@@ -56,7 +56,7 @@ func (op Op) String() string {
 		}
 		return fmt.Sprintf("{A%s+=%s %d%s %d#%d}", a.Key, labutil.Suffix(a.Value, 4), key2shard(a.Key), labutil.ToSubscript(a.ConfigNum), a.ClientId%100, a.OpId)
 	case MigrateShardsArgs:
-		return fmt.Sprintf("{I%s G%d-> %v}", labutil.ToSubscript(a.ConfigNum), a.FromGid, a.Shards)
+		return fmt.Sprintf("{I%s G%d-> %v}", labutil.ToSubscript(a.ConfigNum), a.Gid, a.Shards)
 	default:
 		return ""
 	}
@@ -70,7 +70,7 @@ func (op *Op) Equal(another *Op) bool {
 		return isClerkRequest && a.getClientId() == b.getClientId() && a.getOpId() == b.getOpId()
 	case MigrateShardsArgs:
 		b, isMigrate := another.Payload.(MigrateShardsArgs)
-		return isMigrate && a.FromGid == b.FromGid && a.ConfigNum == b.ConfigNum && a.Shards.toShardSet().Equal(b.Shards.toShardSet())
+		return isMigrate && a.Gid == b.Gid && a.ConfigNum == b.ConfigNum && a.Shards.toShardSet().Equal(b.Shards.toShardSet())
 	default:
 		return false
 	}
@@ -387,18 +387,13 @@ func (kv *ShardKV) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 
 // MigrateShards RPC handler
 func (kv *ShardKV) MigrateShards(args *MigrateShardsArgs, reply *MigrateShardsReply) {
-	e, r := kv.commonHandler(Op{Payload: *args})
-	reply.Err = e
-	if e == OK {
-		reply.Gid = kv.gid
-		reply.Installed = r.(set)
-	}
+	reply.Err, _ = kv.commonHandler(Op{Payload: *args})
 }
 
 // MigrateShards RPC caller, migrate shards to a group
 func (kv *ShardKV) migrateShards(gid int) {
 	args := &MigrateShardsArgs{
-		FromGid: kv.gid,
+		Gid: kv.gid,
 	}
 
 	for !kv.killed() {
@@ -466,17 +461,18 @@ func (kv *ShardKV) migrateShards(gid int) {
 			}
 			if reply.Err == OK {
 				// migration done, start raft consensus to let group know it and update MigrateOut
-				reply.Accepted = args.Shards.toShardSet()
+				reply.Gid = gid
+				reply.Shards = shards{}
+				for shard, data := range args.Shards {
+					reply.Shards[shard] = shardData{Gid: data.Gid, ConfigNum: data.ConfigNum, Data: nil}
+				}
 				_, _, isLeader := kv.rf.Start(Op{Payload: *reply})
 
-				r := "OK"
-				if !args.Shards.toShardSet().Equal(reply.Installed) {
-					r = fmt.Sprintf("I%v", reply.Installed)
-				}
+				extra := ""
 				if !isLeader {
-					r += " BUT NOT LEADER"
+					extra = " BUT NOT LEADER"
 				}
-				lablog.ShardDebug(kv.gid, kv.me, lablog.Log2, "CM->G%d %v, %s", gid, args.Shards, r)
+				lablog.ShardDebug(kv.gid, kv.me, lablog.Log2, "CM->G%d %v%s", gid, args.Shards, extra)
 				return
 			}
 		}
@@ -769,7 +765,7 @@ func (kv *ShardKV) applyMigrateShardsArgs(args *MigrateShardsArgs) requestResult
 				// tell caller this shard is installed to my group
 				installed[shard] = true
 			default:
-				lablog.ShardDebug(kv.gid, kv.me, lablog.Error, "HMI G%d-> %v, inner default %d%v", args.FromGid, args.Shards, shard, in)
+				lablog.ShardDebug(kv.gid, kv.me, lablog.Error, "HMI G%d-> %v, inner default %d%v", args.Gid, args.Shards, shard, in)
 				panic(shard)
 			}
 
@@ -777,14 +773,16 @@ func (kv *ShardKV) applyMigrateShardsArgs(args *MigrateShardsArgs) requestResult
 			// migration not match wait-in, maybe arrive late
 			installed[shard] = true
 		default:
-			lablog.ShardDebug(kv.gid, kv.me, lablog.Error, "HMI G%d-> %v, outer default %d%v", args.FromGid, args.Shards, shard, in)
+			lablog.ShardDebug(kv.gid, kv.me, lablog.Error, "HMI G%d-> %v, outer default %d%v", args.Gid, args.Shards, shard, in)
 			panic(shard)
 		}
 	}
 
 	// also install client request cache for these shards
 	for clientId, cache := range args.ClientTbl {
-		kv.ClientTbl[clientId] = cache
+		if existingCache, ok := kv.ClientTbl[clientId]; !ok || cache.OpId > existingCache.OpId {
+			kv.ClientTbl[clientId] = cache
+		}
 	}
 
 	if _, isLeader := kv.rf.GetState(); isLeader {
@@ -801,9 +799,9 @@ func (kv *ShardKV) applyMigrateShardsArgs(args *MigrateShardsArgs) requestResult
 
 // migration done, remove shard from my group's MigrateOut, with mutex held
 func (kv *ShardKV) applyMigrateShardsReply(reply *MigrateShardsReply) {
-	for shard, out := range kv.MigrateOut {
-		if out.Gid == reply.Gid && reply.Accepted[shard] {
-			// migration target group accepted this shard, so remove from my group's MigrateOut
+	for shard, accepted := range reply.Shards {
+		if out, ok := kv.MigrateOut[shard]; ok && out.Gid == accepted.Gid && out.ConfigNum == accepted.ConfigNum {
+			// accepted migration version matches current migrate-out, can remove from my group's MigrateOut
 			delete(kv.MigrateOut, shard)
 		}
 	}

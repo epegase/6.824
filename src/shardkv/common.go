@@ -127,7 +127,7 @@ type GetReply struct {
 }
 
 type MigrateShardsArgs struct {
-	FromGid   int             // gid that send this request
+	Gid       int             // gid that send this request
 	Shards    shards          // migration shards
 	ClientTbl map[int64]cache // client request cache for these shards
 
@@ -136,9 +136,7 @@ type MigrateShardsArgs struct {
 
 type MigrateShardsReply struct {
 	Err Err
-	Gid int // gid that send this reply
 
-	// TODO: debug
-	Installed set // installed shards set
-	Accepted  set
+	Gid    int // gid that send this reply
+	Shards shards
 }

@@ -1,26 +1,32 @@
-Run as `./dstest -p24 -n128 -l -g2 -m256 -ff -pa Test -u TestMissChange`
+Run as `./dstest -p24 -n128 -l -g2 -m256 -ff -pa Test -u TestConcurrent3`
 
 Running with 24 workers / 8 CPU cores available
 Running on CPU model: Intel(R) Core(TM) i5-8259U CPU @ 2.30GHz
 Running with go version go1.17.6 linux/amd64
 
 Initial iterations: 128
-┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
-┃ Test             ┃ Failed ┃ Total ┃        Time ┃
-┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
-│ TestStaticShards │      0 │   128 │ 3.08 ± 0.31 │
-│ TestJoinLeave    │      0 │   128 │ 2.07 ± 0.30 │
-│ TestSnapshot     │      0 │   128 │ 3.19 ± 0.34 │
-│ TestMissChange   │      0 │   128 │ 4.13 ± 0.77 │
-└──────────────────┴────────┴───────┴─────────────┘
+┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ Test             ┃ Failed ┃ Total ┃         Time ┃
+┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
+│ TestStaticShards │      0 │   128 │  4.89 ± 0.27 │
+│ TestJoinLeave    │      0 │   128 │  3.78 ± 0.29 │
+│ TestSnapshot     │      0 │   128 │  5.29 ± 0.37 │
+│ TestMissChange   │      0 │   128 │  6.42 ± 0.77 │
+│ TestConcurrent1  │      0 │   128 │  5.63 ± 0.31 │
+│ TestConcurrent2  │      0 │   128 │ 15.04 ± 0.39 │
+│ TestConcurrent3  │      0 │   128 │ 17.43 ± 0.60 │
+└──────────────────┴────────┴───────┴──────────────┘
 Increasing iterations to 256
-┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
-┃ Test             ┃ Failed ┃ Total ┃        Time ┃
-┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
-│ TestStaticShards │      0 │   256 │ 3.07 ± 0.25 │
-│ TestJoinLeave    │      0 │   256 │ 2.05 ± 0.26 │
-│ TestSnapshot     │      0 │   256 │ 3.20 ± 0.27 │
-│ TestMissChange   │      0 │   256 │ 4.18 ± 0.81 │
-└──────────────────┴────────┴───────┴─────────────┘
+┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ Test             ┃ Failed ┃ Total ┃         Time ┃
+┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
+│ TestStaticShards │      0 │   256 │  5.00 ± 0.30 │
+│ TestJoinLeave    │      0 │   256 │  3.89 ± 0.30 │
+│ TestSnapshot     │      0 │   256 │  5.41 ± 0.31 │
+│ TestMissChange   │      0 │   256 │  6.49 ± 0.82 │
+│ TestConcurrent1  │      0 │   256 │  5.82 ± 0.31 │
+│ TestConcurrent2  │      0 │   256 │ 15.17 ± 0.30 │
+│ TestConcurrent3  │      0 │   256 │ 17.49 ± 0.65 │
+└──────────────────┴────────┴───────┴──────────────┘
 
 Completed 384 iterations in total
