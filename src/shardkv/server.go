@@ -807,6 +807,8 @@ func (kv *ShardKV) applyMigrateShardsArgs(args *MigrateShardsArgs) applyResult {
 
 		// MigrateOut updated, trigger migration
 		kv.triggerMigration()
+		// WaitIn updated, trigger config fetch, maybe there is a new shard config can be updated
+		kv.triggerConfigFetch()
 	}
 
 	return applyResult{Err: OK, Value: installed}
@@ -821,11 +823,13 @@ func (kv *ShardKV) applyMigrateShardsReply(reply *MigrateShardsReply) {
 		}
 	}
 
-	if _, isLeader := kv.rf.GetState(); !isLeader {
+	if _, isLeader := kv.rf.GetState(); isLeader {
+		lablog.ShardDebug(kv.gid, kv.me, lablog.Trace, "AMO MO %v,WI %v", kv.MigrateOut.ByGroup(), kv.WaitIn.ByGroup())
+
+		// MigrateOut updated, trigger config fetch, maybe there is a new shard config can be updated
+		kv.triggerConfigFetch()
 		return
 	}
-
-	lablog.ShardDebug(kv.gid, kv.me, lablog.Trace, "AMO MO %v,WI %v", kv.MigrateOut.ByGroup(), kv.WaitIn.ByGroup())
 }
 
 // The applier go routine accept applyMsg from applyCh (from underlying raft),
@@ -833,6 +837,15 @@ func (kv *ShardKV) applyMigrateShardsReply(reply *MigrateShardsReply) {
 // reply modified result back to KVServer's RPC handler, if any, through channel identified by commandIndex
 // after every snapshoterAppliedMsgInterval msgs, trigger a snapshot
 func (kv *ShardKV) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger chan<- bool, lastSnapshoterTriggeredCommandIndex int) {
+	defer func() {
+		kv.mu.Lock()
+		// close all pending RPC handler reply channel to avoid goroutine resource leak
+		for _, ce := range kv.commandTbl {
+			close(ce.replyCh)
+		}
+		kv.mu.Unlock()
+	}()
+
 	for m := range applyCh {
 		if m.SnapshotValid {
 			// is snapshot, reset kv server state according to this snapshot
@@ -926,13 +939,6 @@ func (kv *ShardKV) applier(applyCh <-chan raft.ApplyMsg, snapshotTrigger chan<- 
 			}
 		}
 	}
-
-	kv.mu.Lock()
-	defer kv.mu.Unlock()
-	// close all pending RPC handler reply channel to avoid goroutine resource leak
-	for _, ce := range kv.commandTbl {
-		close(ce.replyCh)
-	}
 }
 
 // trigger migrator
@@ -946,6 +952,17 @@ func (kv *ShardKV) triggerMigration() {
 // The migrator go routine check my group's MigrateOut,
 // if any shards need to migrate out, trigger the corresponding shardsMigrator of that group
 func (kv *ShardKV) migrator(trigger <-chan bool) {
+	defer func() {
+		kv.mu.Lock()
+		// close trigger of each group to avoid goroutine resource leak
+		for _, groupInfo := range kv.Cluster {
+			if groupInfo.MigrationTrigger != nil {
+				close(groupInfo.MigrationTrigger)
+			}
+		}
+		kv.mu.Unlock()
+	}()
+
 	for !kv.killed() {
 		select {
 		case _, ok := <-trigger:
@@ -966,13 +983,12 @@ func (kv *ShardKV) migrator(trigger <-chan bool) {
 		kv.mu.Lock()
 		for gid := range kv.MigrateOut.toGroupSet() {
 			// create new shardsMigrator for this group if not started
-			// TODO: need channel capacity 1 ?
 			switch group, ok := kv.Cluster[gid]; {
 			case !ok:
-				kv.Cluster[gid] = &groupInfo{Leader: 0, Servers: nil, MigrationTrigger: make(chan bool, 1)}
+				kv.Cluster[gid] = &groupInfo{Leader: 0, Servers: nil, MigrationTrigger: make(chan bool)}
 				go kv.shardsMigrator(gid, kv.Cluster[gid].MigrationTrigger)
 			case group.MigrationTrigger == nil:
-				group.MigrationTrigger = make(chan bool, 1)
+				group.MigrationTrigger = make(chan bool)
 				go kv.shardsMigrator(gid, kv.Cluster[gid].MigrationTrigger)
 			}
 
@@ -983,15 +999,6 @@ func (kv *ShardKV) migrator(trigger <-chan bool) {
 			}
 		}
 		kv.mu.Unlock()
-	}
-
-	kv.mu.Lock()
-	defer kv.mu.Unlock()
-	// close trigger of each group to avoid goroutine resource leak
-	for _, groupInfo := range kv.Cluster {
-		if groupInfo.MigrationTrigger != nil {
-			close(groupInfo.MigrationTrigger)
-		}
 	}
 }
 
