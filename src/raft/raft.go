@@ -1150,7 +1150,8 @@ func (rf *Raft) committer(applyCh chan<- ApplyMsg, triggerCh chan bool) {
 		// IMPORTANT: close channel to avoid resource leak
 		close(applyCh)
 		// IMPORTANT: drain commitTrigger to avoid goroutine resource leak
-		for range triggerCh {
+		for i := 0; i < len(triggerCh); i++ {
+			<-triggerCh
 		}
 	}()
 
