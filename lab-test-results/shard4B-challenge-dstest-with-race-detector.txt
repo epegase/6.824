@@ -1,16 +1,16 @@
-Run as `./dstest -p24 -n128 -r -ts TestChallenge1Delete,TestChallenge2Unaffected,TestChallenge2Partial --gobin /home/soros/go/bin/go1.19beta1`
+Run as `./dstest -p24 -n128 -r -ts TestChallenge1Delete,TestChallenge2Unaffected,TestChallenge2Partial`
 
 Running with the race detector
 Running with 24 workers / 8 CPU cores available
 Running on CPU model: Intel(R) Core(TM) i5-8259U CPU @ 2.30GHz
-Running with go version go1.19beta1 linux/amd64
+Running with go version go1.17.6 linux/amd64
 
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
 ┃ Test                     ┃ Failed ┃ Total ┃         Time ┃
 ┡━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
-│ TestChallenge1Delete     │      0 │   128 │ 18.60 ± 2.89 │
-│ TestChallenge2Unaffected │      0 │   128 │  7.73 ± 2.84 │
-│ TestChallenge2Partial    │      0 │   128 │  6.77 ± 2.83 │
+│ TestChallenge1Delete     │      0 │   128 │ 27.52 ± 1.52 │
+│ TestChallenge2Unaffected │      0 │   128 │ 10.73 ± 1.01 │
+│ TestChallenge2Partial    │      0 │   128 │  9.40 ± 0.86 │
 └──────────────────────────┴────────┴───────┴──────────────┘
 
 Completed 128 iterations in total

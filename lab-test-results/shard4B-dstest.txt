@@ -8,61 +8,61 @@ Initial iterations: 128
 ┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
 ┃ Test             ┃ Failed ┃ Total ┃         Time ┃
 ┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
-│ TestStaticShards │      0 │   128 │  4.50 ± 0.30 │
-│ TestJoinLeave    │      0 │   128 │  3.45 ± 0.30 │
-│ TestSnapshot     │      0 │   128 │  4.97 ± 0.29 │
-│ TestMissChange   │      0 │   128 │  6.01 ± 0.81 │
-│ TestConcurrent1  │      0 │   128 │  5.34 ± 0.30 │
-│ TestConcurrent2  │      0 │   128 │ 14.57 ± 0.28 │
-│ TestConcurrent3  │      0 │   128 │ 16.92 ± 0.56 │
-│ TestUnreliable1  │      0 │   128 │  7.68 ± 0.94 │
-│ TestUnreliable2  │      0 │   128 │  7.35 ± 0.46 │
-│ TestUnreliable3  │      0 │   128 │  7.54 ± 0.48 │
+│ TestStaticShards │      0 │   128 │  4.53 ± 0.31 │
+│ TestJoinLeave    │      0 │   128 │  3.50 ± 0.31 │
+│ TestSnapshot     │      0 │   128 │  5.02 ± 0.34 │
+│ TestMissChange   │      0 │   128 │  5.98 ± 0.82 │
+│ TestConcurrent1  │      0 │   128 │  5.40 ± 0.32 │
+│ TestConcurrent2  │      0 │   128 │ 14.62 ± 0.31 │
+│ TestConcurrent3  │      0 │   128 │ 16.97 ± 0.56 │
+│ TestUnreliable1  │      0 │   128 │  7.67 ± 0.88 │
+│ TestUnreliable2  │      0 │   128 │  7.47 ± 0.51 │
+│ TestUnreliable3  │      0 │   128 │  7.52 ± 0.54 │
 └──────────────────┴────────┴───────┴──────────────┘
 Increasing iterations to 256
 ┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
 ┃ Test             ┃ Failed ┃ Total ┃         Time ┃
 ┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
-│ TestStaticShards │      0 │   256 │  4.68 ± 0.29 │
-│ TestJoinLeave    │      0 │   256 │  3.65 ± 0.27 │
-│ TestSnapshot     │      0 │   256 │  5.19 ± 0.29 │
-│ TestMissChange   │      0 │   256 │  6.20 ± 0.75 │
-│ TestConcurrent1  │      0 │   256 │  5.50 ± 0.26 │
-│ TestConcurrent2  │      0 │   256 │ 14.78 ± 0.27 │
-│ TestConcurrent3  │      0 │   256 │ 16.98 ± 0.61 │
-│ TestUnreliable1  │      0 │   256 │  7.87 ± 0.90 │
-│ TestUnreliable2  │      0 │   256 │  7.67 ± 0.52 │
-│ TestUnreliable3  │      0 │   256 │  7.69 ± 0.47 │
+│ TestStaticShards │      0 │   256 │  4.70 ± 0.30 │
+│ TestJoinLeave    │      0 │   256 │  3.64 ± 0.29 │
+│ TestSnapshot     │      0 │   256 │  5.17 ± 0.28 │
+│ TestMissChange   │      0 │   256 │  6.29 ± 0.78 │
+│ TestConcurrent1  │      0 │   256 │  5.52 ± 0.28 │
+│ TestConcurrent2  │      0 │   256 │ 14.80 ± 0.29 │
+│ TestConcurrent3  │      0 │   256 │ 17.04 ± 0.57 │
+│ TestUnreliable1  │      0 │   256 │  7.86 ± 0.93 │
+│ TestUnreliable2  │      0 │   256 │  7.66 ± 0.48 │
+│ TestUnreliable3  │      0 │   256 │  7.68 ± 0.55 │
 └──────────────────┴────────┴───────┴──────────────┘
 Increasing iterations to 512
 ┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
 ┃ Test             ┃ Failed ┃ Total ┃         Time ┃
 ┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
-│ TestStaticShards │      0 │   512 │  4.73 ± 0.29 │
-│ TestJoinLeave    │      0 │   512 │  3.63 ± 0.30 │
-│ TestSnapshot     │      0 │   512 │  5.19 ± 0.29 │
-│ TestMissChange   │      0 │   512 │  6.23 ± 0.82 │
-│ TestConcurrent1  │      0 │   512 │  5.53 ± 0.24 │
-│ TestConcurrent2  │      0 │   512 │ 14.79 ± 0.28 │
-│ TestConcurrent3  │      0 │   512 │ 17.06 ± 0.58 │
-│ TestUnreliable1  │      0 │   512 │  7.88 ± 0.87 │
-│ TestUnreliable2  │      0 │   512 │  7.63 ± 0.49 │
-│ TestUnreliable3  │      0 │   512 │  7.68 ± 0.53 │
+│ TestStaticShards │      0 │   512 │  4.70 ± 0.29 │
+│ TestJoinLeave    │      0 │   512 │  3.66 ± 0.30 │
+│ TestSnapshot     │      0 │   512 │  5.20 ± 0.28 │
+│ TestMissChange   │      0 │   512 │  6.29 ± 0.74 │
+│ TestConcurrent1  │      0 │   512 │  5.52 ± 0.25 │
+│ TestConcurrent2  │      0 │   512 │ 14.82 ± 0.28 │
+│ TestConcurrent3  │      0 │   512 │ 17.06 ± 0.57 │
+│ TestUnreliable1  │      0 │   512 │  7.81 ± 0.93 │
+│ TestUnreliable2  │      0 │   512 │  7.62 ± 0.50 │
+│ TestUnreliable3  │      0 │   512 │  7.68 ± 0.50 │
 └──────────────────┴────────┴───────┴──────────────┘
 Increasing iterations to 1024
 ┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
 ┃ Test             ┃ Failed ┃ Total ┃         Time ┃
 ┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
-│ TestStaticShards │      0 │  1024 │  4.71 ± 0.30 │
-│ TestJoinLeave    │      0 │  1024 │  3.65 ± 0.30 │
-│ TestSnapshot     │      0 │  1024 │  5.17 ± 0.29 │
-│ TestMissChange   │      0 │  1024 │  6.31 ± 0.77 │
-│ TestConcurrent1  │      0 │  1024 │  5.53 ± 0.24 │
-│ TestConcurrent2  │      0 │  1024 │ 14.79 ± 0.28 │
-│ TestConcurrent3  │      0 │  1024 │ 17.07 ± 0.62 │
-│ TestUnreliable1  │      0 │  1024 │  7.88 ± 0.94 │
-│ TestUnreliable2  │      0 │  1024 │  7.64 ± 0.50 │
-│ TestUnreliable3  │      0 │  1024 │  7.70 ± 0.53 │
+│ TestStaticShards │      0 │  1024 │  4.72 ± 0.30 │
+│ TestJoinLeave    │      0 │  1024 │  3.66 ± 0.30 │
+│ TestSnapshot     │      0 │  1024 │  5.19 ± 0.29 │
+│ TestMissChange   │      0 │  1024 │  6.27 ± 0.80 │
+│ TestConcurrent1  │      0 │  1024 │  5.53 ± 0.26 │
+│ TestConcurrent2  │      0 │  1024 │ 14.80 ± 0.28 │
+│ TestConcurrent3  │      0 │  1024 │ 17.09 ± 0.61 │
+│ TestUnreliable1  │      0 │  1024 │  7.85 ± 0.92 │
+│ TestUnreliable2  │      0 │  1024 │  7.65 ± 0.52 │
+│ TestUnreliable3  │      0 │  1024 │  7.70 ± 0.52 │
 └──────────────────┴────────┴───────┴──────────────┘
 
 Completed 1920 iterations in total

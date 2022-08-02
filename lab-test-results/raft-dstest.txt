@@ -2,134 +2,135 @@ Run as `./dstest -p50 -n128 -l -g2 -m1024 -ff -pa 2A,2B,2C,2D`
 
 Running with 50 workers / 8 CPU cores available
 Running on CPU model: Intel(R) Core(TM) i5-8259U CPU @ 2.30GHz
+Running with go version go1.17.6 linux/amd64
 
 Initial iterations: 128
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
 ┃ Test                            ┃ Failed ┃ Total ┃         Time ┃
 ┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
-│ TestInitialElection2A           │      0 │   128 │  3.56 ± 0.33 │
-│ TestReElection2A                │      0 │   128 │  6.03 ± 0.45 │
-│ TestManyElections2A             │      0 │   128 │  7.45 ± 0.82 │
-│ TestBasicAgree2B                │      0 │   128 │  0.82 ± 0.34 │
-│ TestRPCBytes2B                  │      0 │   128 │  1.62 ± 0.32 │
-│ TestFollowerFailure2B           │      0 │   128 │  4.75 ± 0.32 │
-│ TestLeaderFailure2B             │      0 │   128 │  5.69 ± 0.37 │
-│ TestFailAgree2B                 │      0 │   128 │  5.51 ± 0.45 │
-│ TestFailNoAgree2B               │      0 │   128 │  4.04 ± 0.40 │
-│ TestConcurrentStarts2B          │      0 │   128 │  0.91 ± 0.30 │
-│ TestRejoin2B                    │      0 │   128 │  5.62 ± 1.05 │
-│ TestBackup2B                    │      0 │   128 │ 16.13 ± 1.06 │
-│ TestCount2B                     │      0 │   128 │  2.35 ± 0.32 │
-│ TestPersist12C                  │      0 │   128 │  3.91 ± 0.37 │
-│ TestPersist22C                  │      0 │   128 │ 16.53 ± 1.00 │
-│ TestPersist32C                  │      0 │   128 │  1.50 ± 0.36 │
-│ TestFigure82C                   │      0 │   128 │ 31.11 ± 2.48 │
-│ TestUnreliableAgree2C           │      0 │   128 │  1.61 ± 0.34 │
-│ TestFigure8Unreliable2C         │      0 │   128 │ 33.43 ± 2.97 │
-│ TestReliableChurn2C             │      0 │   128 │ 16.66 ± 0.34 │
-│ TestUnreliableChurn2C           │      0 │   128 │ 16.66 ± 0.37 │
-│ TestSnapshotBasic2D             │      0 │   128 │  2.31 ± 0.38 │
-│ TestSnapshotInstall2D           │      0 │   128 │ 41.32 ± 1.33 │
-│ TestSnapshotInstallUnreliable2D │      0 │   128 │ 45.72 ± 2.17 │
-│ TestSnapshotInstallCrash2D      │      0 │   128 │ 31.46 ± 0.64 │
-│ TestSnapshotInstallUnCrash2D    │      0 │   128 │ 36.85 ± 2.54 │
-│ TestSnapshotAllCrash2D          │      0 │   128 │  6.98 ± 0.80 │
+│ TestInitialElection2A           │      0 │   128 │  3.40 ± 0.29 │
+│ TestReElection2A                │      0 │   128 │  5.87 ± 0.47 │
+│ TestManyElections2A             │      0 │   128 │  7.25 ± 0.83 │
+│ TestBasicAgree2B                │      0 │   128 │  0.74 ± 0.26 │
+│ TestRPCBytes2B                  │      0 │   128 │  1.53 ± 0.26 │
+│ TestFollowerFailure2B           │      0 │   128 │  4.69 ± 0.29 │
+│ TestLeaderFailure2B             │      0 │   128 │  5.58 ± 0.31 │
+│ TestFailAgree2B                 │      0 │   128 │  5.36 ± 0.54 │
+│ TestFailNoAgree2B               │      0 │   128 │  3.93 ± 0.35 │
+│ TestConcurrentStarts2B          │      0 │   128 │  0.87 ± 0.30 │
+│ TestRejoin2B                    │      0 │   128 │  5.66 ± 1.09 │
+│ TestBackup2B                    │      0 │   128 │ 15.83 ± 1.07 │
+│ TestCount2B                     │      0 │   128 │  2.38 ± 0.33 │
+│ TestPersist12C                  │      0 │   128 │  3.86 ± 0.32 │
+│ TestPersist22C                  │      0 │   128 │ 16.65 ± 1.27 │
+│ TestPersist32C                  │      0 │   128 │  1.49 ± 0.29 │
+│ TestFigure82C                   │      0 │   128 │ 31.65 ± 2.80 │
+│ TestUnreliableAgree2C           │      0 │   128 │  1.58 ± 0.36 │
+│ TestFigure8Unreliable2C         │      0 │   128 │ 33.35 ± 2.68 │
+│ TestReliableChurn2C             │      0 │   128 │ 16.59 ± 0.32 │
+│ TestUnreliableChurn2C           │      0 │   128 │ 16.53 ± 0.29 │
+│ TestSnapshotBasic2D             │      0 │   128 │  4.03 ± 0.30 │
+│ TestSnapshotInstall2D           │      0 │   128 │ 43.43 ± 1.50 │
+│ TestSnapshotInstallUnreliable2D │      0 │   128 │ 49.72 ± 2.37 │
+│ TestSnapshotInstallCrash2D      │      0 │   128 │ 33.51 ± 0.72 │
+│ TestSnapshotInstallUnCrash2D    │      0 │   128 │ 41.52 ± 2.41 │
+│ TestSnapshotAllCrash2D          │      0 │   128 │  6.96 ± 0.78 │
 └─────────────────────────────────┴────────┴───────┴──────────────┘
 Increasing iterations to 256
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
 ┃ Test                            ┃ Failed ┃ Total ┃         Time ┃
 ┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
-│ TestInitialElection2A           │      0 │   256 │  3.51 ± 0.27 │
-│ TestReElection2A                │      0 │   256 │  5.95 ± 0.43 │
-│ TestManyElections2A             │      0 │   256 │  7.38 ± 0.83 │
-│ TestBasicAgree2B                │      0 │   256 │  0.80 ± 0.25 │
-│ TestRPCBytes2B                  │      0 │   256 │  1.58 ± 0.27 │
-│ TestFollowerFailure2B           │      0 │   256 │  4.73 ± 0.25 │
-│ TestLeaderFailure2B             │      0 │   256 │  5.64 ± 0.30 │
-│ TestFailAgree2B                 │      0 │   256 │  5.39 ± 0.48 │
-│ TestFailNoAgree2B               │      0 │   256 │  3.98 ± 0.32 │
-│ TestConcurrentStarts2B          │      0 │   256 │  0.88 ± 0.26 │
-│ TestRejoin2B                    │      0 │   256 │  5.78 ± 1.03 │
-│ TestBackup2B                    │      0 │   256 │ 15.88 ± 1.05 │
-│ TestCount2B                     │      0 │   256 │  2.33 ± 0.24 │
-│ TestPersist12C                  │      0 │   256 │  3.86 ± 0.32 │
-│ TestPersist22C                  │      0 │   256 │ 16.52 ± 1.20 │
-│ TestPersist32C                  │      0 │   256 │  1.48 ± 0.27 │
-│ TestFigure82C                   │      0 │   256 │ 31.13 ± 2.55 │
-│ TestUnreliableAgree2C           │      0 │   256 │  1.58 ± 0.34 │
-│ TestFigure8Unreliable2C         │      0 │   256 │ 33.28 ± 2.75 │
-│ TestReliableChurn2C             │      0 │   256 │ 16.62 ± 0.29 │
-│ TestUnreliableChurn2C           │      0 │   256 │ 16.61 ± 0.28 │
-│ TestSnapshotBasic2D             │      0 │   256 │  2.31 ± 0.33 │
-│ TestSnapshotInstall2D           │      0 │   256 │ 41.31 ± 1.35 │
-│ TestSnapshotInstallUnreliable2D │      0 │   256 │ 45.83 ± 2.39 │
-│ TestSnapshotInstallCrash2D      │      0 │   256 │ 31.48 ± 0.69 │
-│ TestSnapshotInstallUnCrash2D    │      0 │   256 │ 36.77 ± 2.48 │
-│ TestSnapshotAllCrash2D          │      0 │   256 │  7.05 ± 0.73 │
+│ TestInitialElection2A           │      0 │   256 │  3.39 ± 0.20 │
+│ TestReElection2A                │      0 │   256 │  5.90 ± 0.40 │
+│ TestManyElections2A             │      0 │   256 │  7.35 ± 0.78 │
+│ TestBasicAgree2B                │      0 │   256 │  0.74 ± 0.24 │
+│ TestRPCBytes2B                  │      0 │   256 │  1.53 ± 0.25 │
+│ TestFollowerFailure2B           │      0 │   256 │  4.65 ± 0.23 │
+│ TestLeaderFailure2B             │      0 │   256 │  5.58 ± 0.26 │
+│ TestFailAgree2B                 │      0 │   256 │  5.32 ± 0.47 │
+│ TestFailNoAgree2B               │      0 │   256 │  3.90 ± 0.32 │
+│ TestConcurrentStarts2B          │      0 │   256 │  0.86 ± 0.23 │
+│ TestRejoin2B                    │      0 │   256 │  5.77 ± 1.02 │
+│ TestBackup2B                    │      0 │   256 │ 15.87 ± 1.02 │
+│ TestCount2B                     │      0 │   256 │  2.38 ± 0.25 │
+│ TestPersist12C                  │      0 │   256 │  3.83 ± 0.29 │
+│ TestPersist22C                  │      0 │   256 │ 16.70 ± 1.12 │
+│ TestPersist32C                  │      0 │   256 │  1.47 ± 0.26 │
+│ TestFigure82C                   │      0 │   256 │ 31.57 ± 2.67 │
+│ TestUnreliableAgree2C           │      0 │   256 │  1.58 ± 0.32 │
+│ TestFigure8Unreliable2C         │      0 │   256 │ 33.43 ± 2.88 │
+│ TestReliableChurn2C             │      0 │   256 │ 16.56 ± 0.27 │
+│ TestUnreliableChurn2C           │      0 │   256 │ 16.53 ± 0.28 │
+│ TestSnapshotBasic2D             │      0 │   256 │  4.04 ± 0.24 │
+│ TestSnapshotInstall2D           │      0 │   256 │ 43.30 ± 1.35 │
+│ TestSnapshotInstallUnreliable2D │      0 │   256 │ 49.77 ± 2.45 │
+│ TestSnapshotInstallCrash2D      │      0 │   256 │ 33.46 ± 0.61 │
+│ TestSnapshotInstallUnCrash2D    │      0 │   256 │ 41.13 ± 2.60 │
+│ TestSnapshotAllCrash2D          │      0 │   256 │  6.87 ± 0.73 │
 └─────────────────────────────────┴────────┴───────┴──────────────┘
 Increasing iterations to 512
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
 ┃ Test                            ┃ Failed ┃ Total ┃         Time ┃
 ┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
-│ TestInitialElection2A           │      0 │   512 │  3.52 ± 0.25 │
-│ TestReElection2A                │      0 │   512 │  6.02 ± 0.40 │
-│ TestManyElections2A             │      0 │   512 │  7.35 ± 0.80 │
-│ TestBasicAgree2B                │      0 │   512 │  0.81 ± 0.23 │
-│ TestRPCBytes2B                  │      0 │   512 │  1.59 ± 0.20 │
-│ TestFollowerFailure2B           │      0 │   512 │  4.72 ± 0.22 │
-│ TestLeaderFailure2B             │      0 │   512 │  5.65 ± 0.25 │
-│ TestFailAgree2B                 │      0 │   512 │  5.45 ± 0.41 │
-│ TestFailNoAgree2B               │      0 │   512 │  3.96 ± 0.29 │
-│ TestConcurrentStarts2B          │      0 │   512 │  0.86 ± 0.18 │
-│ TestRejoin2B                    │      0 │   512 │  5.66 ± 1.01 │
-│ TestBackup2B                    │      0 │   512 │ 15.96 ± 1.01 │
-│ TestCount2B                     │      0 │   512 │  2.32 ± 0.17 │
-│ TestPersist12C                  │      0 │   512 │  3.86 ± 0.29 │
-│ TestPersist22C                  │      0 │   512 │ 16.62 ± 1.14 │
-│ TestPersist32C                  │      0 │   512 │  1.48 ± 0.20 │
-│ TestFigure82C                   │      0 │   512 │ 31.42 ± 2.58 │
-│ TestUnreliableAgree2C           │      0 │   512 │  1.56 ± 0.29 │
-│ TestFigure8Unreliable2C         │      0 │   512 │ 33.55 ± 2.94 │
-│ TestReliableChurn2C             │      0 │   512 │ 16.63 ± 0.23 │
-│ TestUnreliableChurn2C           │      0 │   512 │ 16.59 ± 0.24 │
-│ TestSnapshotBasic2D             │      0 │   512 │  2.28 ± 0.24 │
-│ TestSnapshotInstall2D           │      0 │   512 │ 41.31 ± 1.28 │
-│ TestSnapshotInstallUnreliable2D │      0 │   512 │ 45.59 ± 2.31 │
-│ TestSnapshotInstallCrash2D      │      0 │   512 │ 31.50 ± 0.71 │
-│ TestSnapshotInstallUnCrash2D    │      0 │   512 │ 36.97 ± 2.47 │
-│ TestSnapshotAllCrash2D          │      0 │   512 │  7.06 ± 0.72 │
+│ TestInitialElection2A           │      0 │   512 │  3.37 ± 0.19 │
+│ TestReElection2A                │      0 │   512 │  5.87 ± 0.36 │
+│ TestManyElections2A             │      0 │   512 │  7.30 ± 0.77 │
+│ TestBasicAgree2B                │      0 │   512 │  0.72 ± 0.16 │
+│ TestRPCBytes2B                  │      0 │   512 │  1.51 ± 0.19 │
+│ TestFollowerFailure2B           │      0 │   512 │  4.65 ± 0.19 │
+│ TestLeaderFailure2B             │      0 │   512 │  5.57 ± 0.23 │
+│ TestFailAgree2B                 │      0 │   512 │  5.35 ± 0.41 │
+│ TestFailNoAgree2B               │      0 │   512 │  3.89 ± 0.28 │
+│ TestConcurrentStarts2B          │      0 │   512 │  0.85 ± 0.17 │
+│ TestRejoin2B                    │      0 │   512 │  5.60 ± 1.04 │
+│ TestBackup2B                    │      0 │   512 │ 15.94 ± 1.02 │
+│ TestCount2B                     │      0 │   512 │  2.37 ± 0.17 │
+│ TestPersist12C                  │      0 │   512 │  3.86 ± 0.30 │
+│ TestPersist22C                  │      0 │   512 │ 16.69 ± 1.09 │
+│ TestPersist32C                  │      0 │   512 │  1.47 ± 0.22 │
+│ TestFigure82C                   │      0 │   512 │ 31.38 ± 2.80 │
+│ TestUnreliableAgree2C           │      0 │   512 │  1.53 ± 0.23 │
+│ TestFigure8Unreliable2C         │      0 │   512 │ 33.71 ± 2.83 │
+│ TestReliableChurn2C             │      0 │   512 │ 16.56 ± 0.23 │
+│ TestUnreliableChurn2C           │      0 │   512 │ 16.53 ± 0.21 │
+│ TestSnapshotBasic2D             │      0 │   512 │  4.02 ± 0.20 │
+│ TestSnapshotInstall2D           │      0 │   512 │ 43.33 ± 1.34 │
+│ TestSnapshotInstallUnreliable2D │      0 │   512 │ 49.75 ± 2.54 │
+│ TestSnapshotInstallCrash2D      │      0 │   512 │ 33.43 ± 0.63 │
+│ TestSnapshotInstallUnCrash2D    │      0 │   512 │ 41.19 ± 2.60 │
+│ TestSnapshotAllCrash2D          │      0 │   512 │  6.87 ± 0.67 │
 └─────────────────────────────────┴────────┴───────┴──────────────┘
 Increasing iterations to 1024
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┓
 ┃ Test                            ┃ Failed ┃ Total ┃         Time ┃
 ┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━┩
-│ TestInitialElection2A           │      0 │  1024 │  3.51 ± 0.22 │
-│ TestReElection2A                │      0 │  1024 │  5.99 ± 0.40 │
-│ TestManyElections2A             │      0 │  1024 │  7.39 ± 0.84 │
-│ TestBasicAgree2B                │      0 │  1024 │  0.78 ± 0.21 │
-│ TestRPCBytes2B                  │      0 │  1024 │  1.57 ± 0.19 │
-│ TestFollowerFailure2B           │      0 │  1024 │  4.71 ± 0.19 │
-│ TestLeaderFailure2B             │      0 │  1024 │  5.64 ± 0.22 │
-│ TestFailAgree2B                 │      0 │  1024 │  5.44 ± 0.40 │
-│ TestFailNoAgree2B               │      0 │  1024 │  3.97 ± 0.26 │
-│ TestConcurrentStarts2B          │      0 │  1024 │  0.86 ± 0.15 │
+│ TestInitialElection2A           │      0 │  1024 │  3.37 ± 0.13 │
+│ TestReElection2A                │      0 │  1024 │  5.86 ± 0.34 │
+│ TestManyElections2A             │      0 │  1024 │  7.31 ± 0.78 │
+│ TestBasicAgree2B                │      0 │  1024 │  0.71 ± 0.14 │
+│ TestRPCBytes2B                  │      0 │  1024 │  1.51 ± 0.13 │
+│ TestFollowerFailure2B           │      0 │  1024 │  4.64 ± 0.15 │
+│ TestLeaderFailure2B             │      0 │  1024 │  5.57 ± 0.20 │
+│ TestFailAgree2B                 │      0 │  1024 │  5.35 ± 0.40 │
+│ TestFailNoAgree2B               │      0 │  1024 │  3.88 ± 0.25 │
+│ TestConcurrentStarts2B          │      0 │  1024 │  0.84 ± 0.12 │
 │ TestRejoin2B                    │      0 │  1024 │  5.65 ± 1.02 │
-│ TestBackup2B                    │      0 │  1024 │ 16.00 ± 1.01 │
-│ TestCount2B                     │      0 │  1024 │  2.31 ± 0.14 │
-│ TestPersist12C                  │      0 │  1024 │  3.84 ± 0.26 │
-│ TestPersist22C                  │      0 │  1024 │ 16.60 ± 1.12 │
-│ TestPersist32C                  │      0 │  1024 │  1.48 ± 0.20 │
-│ TestFigure82C                   │      0 │  1024 │ 31.24 ± 2.73 │
-│ TestUnreliableAgree2C           │      0 │  1024 │  1.56 ± 0.26 │
-│ TestFigure8Unreliable2C         │      0 │  1024 │ 33.79 ± 2.71 │
-│ TestReliableChurn2C             │      0 │  1024 │ 16.63 ± 0.23 │
-│ TestUnreliableChurn2C           │      0 │  1024 │ 16.60 ± 0.23 │
-│ TestSnapshotBasic2D             │      0 │  1024 │  2.29 ± 0.24 │
-│ TestSnapshotInstall2D           │      0 │  1024 │ 41.38 ± 1.29 │
-│ TestSnapshotInstallUnreliable2D │      0 │  1024 │ 45.67 ± 2.36 │
-│ TestSnapshotInstallCrash2D      │      0 │  1024 │ 31.48 ± 0.69 │
-│ TestSnapshotInstallUnCrash2D    │      0 │  1024 │ 36.92 ± 2.50 │
-│ TestSnapshotAllCrash2D          │      0 │  1024 │  7.01 ± 0.74 │
+│ TestBackup2B                    │      0 │  1024 │ 16.01 ± 1.00 │
+│ TestCount2B                     │      0 │  1024 │  2.35 ± 0.12 │
+│ TestPersist12C                  │      0 │  1024 │  3.83 ± 0.25 │
+│ TestPersist22C                  │      0 │  1024 │ 16.63 ± 1.14 │
+│ TestPersist32C                  │      0 │  1024 │  1.46 ± 0.18 │
+│ TestFigure82C                   │      0 │  1024 │ 31.25 ± 2.66 │
+│ TestUnreliableAgree2C           │      0 │  1024 │  1.55 ± 0.24 │
+│ TestFigure8Unreliable2C         │      0 │  1024 │ 33.46 ± 2.87 │
+│ TestReliableChurn2C             │      0 │  1024 │ 16.56 ± 0.19 │
+│ TestUnreliableChurn2C           │      0 │  1024 │ 16.52 ± 0.17 │
+│ TestSnapshotBasic2D             │      0 │  1024 │  4.02 ± 0.15 │
+│ TestSnapshotInstall2D           │      0 │  1024 │ 43.28 ± 1.37 │
+│ TestSnapshotInstallUnreliable2D │      0 │  1024 │ 49.67 ± 2.37 │
+│ TestSnapshotInstallCrash2D      │      0 │  1024 │ 33.42 ± 0.61 │
+│ TestSnapshotInstallUnCrash2D    │      0 │  1024 │ 41.36 ± 2.64 │
+│ TestSnapshotAllCrash2D          │      0 │  1024 │  6.88 ± 0.65 │
 └─────────────────────────────────┴────────┴───────┴──────────────┘
 
 Completed 1920 iterations in total

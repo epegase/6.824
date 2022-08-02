@@ -1,20 +1,20 @@
 Test: InstallSnapshot RPC (3B) ...
-  ... Passed --   1.2  3   221   63
+  ... Passed --   2.2  3   334   63
 Test: snapshot size is reasonable (3B) ...
-  ... Passed --   0.5  3  2413  800
+  ... Passed --   0.4  3  2409  800
 Test: ops complete fast enough (3B) ...
-  ... Passed --   0.5  3  3018    0
+  ... Passed --   0.4  3  3017    0
 Test: restarts, snapshots, one client (3B) ...
-  ... Passed --  21.1  5 283083 54781
+  ... Passed --  20.8  5 276760 54244
 Test: restarts, snapshots, many clients (3B) ...
-  ... Passed --  18.7  5 320651 90231
+  ... Passed --  18.7  5 327252 90823
 Test: unreliable net, snapshots, many clients (3B) ...
-  ... Passed --  15.9  5 12604 1784
+  ... Passed --  16.1  5 12793 1830
 Test: unreliable net, restarts, snapshots, many clients (3B) ...
-  ... Passed --  19.4  5 13166 1811
+  ... Passed --  21.8  5 13990 1808
 Test: unreliable net, restarts, partitions, snapshots, many clients (3B) ...
-  ... Passed --  26.4  5  9920  900
+  ... Passed --  26.4  5  8679  882
 Test: unreliable net, restarts, partitions, snapshots, random keys, many clients (3B) ...
-  ... Passed --  28.2  7 34505 3053
+  ... Passed --  28.6  7 35752 3047
 PASS
-ok  	6.824/kvraft	131.945s
+ok  	6.824/kvraft	135.332s
