@@ -18,6 +18,11 @@ b6143938e1a4a0eb1f27f121acdde63c
 
 - [Lab2: Raft](https://pdos.csail.mit.edu/6.824/labs/lab-raft.html)
 
+  <details>
+  <summary>Architecture Overview</summary>
+  TODO
+  </details>
+
   ✅ [all test cases, one iteration](./lab-test-results/raft.txt)  
   ✅ [all test cases, thousands iterations](./lab-test-results/raft-dstest.txt)  
   ✅ [all test cases, with race detector, hundreds iterations](./lab-test-results/raft-dstest-with-race-detector.txt)  
@@ -32,6 +37,11 @@ b6143938e1a4a0eb1f27f121acdde63c
 
 - [Lab3: KV Raft](https://pdos.csail.mit.edu/6.824/labs/lab-kvraft.html)
 
+  <details>
+  <summary>Architecture Overview</summary>
+  TODO
+  </details>
+
   ✅ [all test cases, one iteration](./lab-test-results/kvraft.txt)  
   ✅ [all test cases, thousands iterations](./lab-test-results/kvraft-dstest.txt)  
   ✅ [all test cases, with race detector, hundreds iterations](./lab-test-results/kvraft-dstest-with-race-detector.txt)  
@@ -41,6 +51,11 @@ b6143938e1a4a0eb1f27f121acdde63c
   ✅ [3B test cases, hundreds iterations](./lab-test-results/kvraft3B-dstest.txt)  
 
 - [Lab4: Sharded KV](https://pdos.csail.mit.edu/6.824/labs/lab-shard.html)
+
+  <details>
+  <summary>Architecture Overview</summary>
+  TODO
+  </details>
 
   ✅ [4A (Shard Controller) test cases, one iteration](./lab-test-results/shard4A.txt)  
   ✅ [4A (Shard Controller) test cases, thousands iterations](./lab-test-results/shard4A-dstest.txt)  
@@ -103,7 +118,7 @@ b6143938e1a4a0eb1f27f121acdde63c
   - [x] Preparation: Read [Memcached at Facebook (2013)](https://pdos.csail.mit.edu/6.824/papers/memcache-fb.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/memcache-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-memcached&lec=16))
 
 - [ ] LEC 17: [Causal Consistency, COPS](https://pdos.csail.mit.edu/6.824/notes/l-cops.txt), [video](https://pdos.csail.mit.edu/6.824/video/17.html) 
-  - [ ] Preparation: Read [COPS (2011)](https://pdos.csail.mit.edu/6.824/papers/cops.pdf) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-cops&lec=17))
+  - [x] Preparation: Read [COPS (2011)](https://pdos.csail.mit.edu/6.824/papers/cops.pdf) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-cops&lec=17))
 
 - [ ] LEC 18: [Fork Consistency, SUNDR](https://pdos.csail.mit.edu/6.824/notes/l-sundr.txt), [video](https://youtu.be/FxwjSs_xSBM) 
   - [ ] Preparation: Read [SUNDR (2004)](https://pdos.csail.mit.edu/6.824/papers/li-sundr.pdf) (until Section 3.4) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/sundr-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-sundr&lec=18))
