@@ -9,8 +9,15 @@ schedule html md5:
 > curl https://pdos.csail.mit.edu/6.824/schedule.html | md5sum
 b6143938e1a4a0eb1f27f121acdde63c
 ```
+
+> **Warning**  
+> All code only for reference.  
+> DO NOT copy if you are required to write your own code.
+
 ---
 ### Labs
+
+All labs' code are commented with enough details, especially Raft related labs
 
 - [Lab1: MapReduce](https://pdos.csail.mit.edu/6.824/labs/lab-mr.html)
 
@@ -120,7 +127,7 @@ b6143938e1a4a0eb1f27f121acdde63c
 - [x] LEC 17: [Causal Consistency, COPS](https://pdos.csail.mit.edu/6.824/notes/l-cops.txt), [video](https://youtu.be/fR_NB714EAI) 
   - [x] Preparation: Read [COPS (2011)](https://pdos.csail.mit.edu/6.824/papers/cops.pdf) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-cops&lec=17))
 
-- [ ] LEC 18: [Fork Consistency, SUNDR](https://pdos.csail.mit.edu/6.824/notes/l-sundr.txt), [video](https://youtu.be/FxwjSs_xSBM) 
+- [x] LEC 18: [Fork Consistency, SUNDR](https://pdos.csail.mit.edu/6.824/notes/l-sundr.txt), [video](https://youtu.be/FxwjSs_xSBM) 
   - [x] Preparation: Read [SUNDR (2004)](https://pdos.csail.mit.edu/6.824/papers/li-sundr.pdf) (until Section 3.4) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/sundr-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-sundr&lec=18))
 
 - [ ] LEC 19: Peer-to-peer: [Bitcoin](https://pdos.csail.mit.edu/6.824/notes/l-bitcoin.txt), [video](https://youtu.be/yB6m8EjAqPU) 
