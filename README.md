@@ -10,12 +10,12 @@ schedule html md5:
 b6143938e1a4a0eb1f27f121acdde63c
 ```
 
+---
+### Labs
+
 > **Warning**  
 > All code only for reference.  
 > DO NOT copy if you are required to write your own code.
-
----
-### Labs
 
 All labs' code are commented with enough details, especially Raft related labs
 
@@ -139,4 +139,4 @@ All labs' code are commented with enough details, especially Raft related labs
 - [ ] LEC 21: [Smart Contracts](https://pdos.csail.mit.edu/6.824/notes/l-ethereum.txt), [Billboard.sol](https://pdos.csail.mit.edu/6.824/notes/Billboard.sol), [Casino.sol](https://pdos.csail.mit.edu/6.824/notes/Casino.sol) 
   - [ ] Preparation: Read [Ethereum White Paper (2014)](https://ethereum.org/en/whitepaper/) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-ethereum&lec=21))
 
-- [ ] LEC 22: Project demos, [video](https://youtu.be/bu41Qt9G5Qo) 
+- [x] LEC 22: Project demos, [video](https://youtu.be/bu41Qt9G5Qo) 
