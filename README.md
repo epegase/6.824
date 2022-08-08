@@ -25,10 +25,8 @@ All labs' code are commented with enough details, especially Raft related labs
 
 - [Lab2: Raft](https://pdos.csail.mit.edu/6.824/labs/lab-raft.html)
 
-  <details>
-  <summary>Architecture Overview</summary>
-  TODO
-  </details>
+  <p align="center"><img src="./resources/raft.svg" alt="Architecture Overview"></p>
+  <p align="center">Architecture Overview</p>
 
   ✅ [all test cases, one iteration](./lab-test-results/raft.txt)  
   ✅ [all test cases, thousands iterations](./lab-test-results/raft-dstest.txt)  
