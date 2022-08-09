@@ -55,10 +55,8 @@ All labs' code are commented with enough details, especially Raft related labs
 
 - [Lab4: Sharded KV](https://pdos.csail.mit.edu/6.824/labs/lab-shard.html)
 
-  <details>
-  <summary>Architecture Overview</summary>
-  TODO
-  </details>
+  <p align="center"><img src="./resources/shardkv.svg" alt="Architecture Overview"></p>
+  <p align="center">Architecture Overview</p>
 
   ✅ [4A (Shard Controller) test cases, one iteration](./lab-test-results/shard4A.txt)  
   ✅ [4A (Shard Controller) test cases, thousands iterations](./lab-test-results/shard4A-dstest.txt)  
