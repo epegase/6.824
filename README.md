@@ -42,10 +42,8 @@ All labs' code are commented with enough details, especially Raft related labs
 
 - [Lab3: KV Raft](https://pdos.csail.mit.edu/6.824/labs/lab-kvraft.html)
 
-  <details>
-  <summary>Architecture Overview</summary>
-  TODO
-  </details>
+  <p align="center"><img src="./resources/kvraft.svg" alt="Architecture Overview"></p>
+  <p align="center">Architecture Overview</p>
 
   ✅ [all test cases, one iteration](./lab-test-results/kvraft.txt)  
   ✅ [all test cases, thousands iterations](./lab-test-results/kvraft-dstest.txt)  
