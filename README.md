@@ -124,7 +124,7 @@ All labs' code are commented with enough details, especially Raft related labs
 - [x] LEC 18: [Fork Consistency, SUNDR](https://pdos.csail.mit.edu/6.824/notes/l-sundr.txt), [video](https://youtu.be/FxwjSs_xSBM) 
   - [x] Preparation: Read [SUNDR (2004)](https://pdos.csail.mit.edu/6.824/papers/li-sundr.pdf) (until Section 3.4) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/sundr-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-sundr&lec=18))
 
-- [ ] LEC 19: Peer-to-peer: [Bitcoin](https://pdos.csail.mit.edu/6.824/notes/l-bitcoin.txt), [video](https://youtu.be/yB6m8EjAqPU) 
+- [x] LEC 19: Peer-to-peer: [Bitcoin](https://pdos.csail.mit.edu/6.824/notes/l-bitcoin.txt), [video](https://youtu.be/yB6m8EjAqPU) 
   - [x] Preparation: Read [Bitcoin (2008)](https://pdos.csail.mit.edu/6.824/papers/bitcoin.pdf), and [summary](http://www.michaelnielsen.org/ddi/how-the-bitcoin-protocol-actually-works) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/bitcoin-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-bitcoin&lec=19))
 
 - [ ] LEC 20: [Blockstack](https://pdos.csail.mit.edu/6.824/notes/l-blockstack.txt), [video](https://youtu.be/DnyBPxo3B6I) 
