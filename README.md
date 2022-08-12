@@ -3,13 +3,6 @@
 <p align="center"><img src="./resources/screenshot.png" alt="Raft election log"></p>
 <p align="center">Raft election log</p>
 
-schedule html md5:
-
-```sh
-> curl https://pdos.csail.mit.edu/6.824/schedule.html | md5sum
-b6143938e1a4a0eb1f27f121acdde63c
-```
-
 ---
 ### Labs
 
