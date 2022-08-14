@@ -124,6 +124,6 @@ All labs' code are commented with enough details, especially Raft related labs
   - [x] Preparation: Read [BlockStack (2016)](https://pdos.csail.mit.edu/6.824/papers/blockstack-atc16.pdf) ([FAQ](https://pdos.csail.mit.edu/6.824/papers/blockstack-faq.txt)) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-blockstack&lec=20))
 
 - [ ] LEC 21: [Smart Contracts](https://pdos.csail.mit.edu/6.824/notes/l-ethereum.txt), [Billboard.sol](https://pdos.csail.mit.edu/6.824/notes/Billboard.sol), [Casino.sol](https://pdos.csail.mit.edu/6.824/notes/Casino.sol) 
-  - [ ] Preparation: Read [Ethereum White Paper (2014)](https://ethereum.org/en/whitepaper/) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-ethereum&lec=21))
+  - [x] Preparation: Read [Ethereum White Paper (2014)](https://ethereum.org/en/whitepaper/) ([Question](https://pdos.csail.mit.edu/6.824/questions.html?q=q-ethereum&lec=21))
 
 - [x] LEC 22: Project demos, [video](https://youtu.be/bu41Qt9G5Qo) 
